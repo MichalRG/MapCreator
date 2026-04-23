@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map Creator</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">MC</span>
+          <div>
+            <h1>Map Creator</h1>
+            <p>Local hex map workshop</p>
+          </div>
+        </div>
+        <div class="toolbar-group">
+          <button id="new-map-button" class="action-button">New Map</button>
+          <button id="open-project-button" class="action-button">Open</button>
+          <button id="save-project-button" class="action-button">Save</button>
+          <button id="save-project-as-button" class="action-button">Save As</button>
+          <button id="export-png-button" class="action-button accent-button">Export PNG</button>
+        </div>
+        <div class="toolbar-group">
+          <button id="undo-button" class="action-button">Undo</button>
+          <button id="redo-button" class="action-button">Redo</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="sidebar left-sidebar">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Map Setup</h2>
+            </div>
+            <label class="field">
+              <span>Map name</span>
+              <input id="map-name-input" type="text" value="Untitled Map" />
+            </label>
+            <label class="field">
+              <span>Preset</span>
+              <select id="preset-select"></select>
+            </label>
+            <div class="dimension-grid">
+              <label class="field">
+                <span>Width</span>
+                <input id="map-width-input" type="number" min="1" max="80" value="20" />
+              </label>
+              <label class="field">
+                <span>Height</span>
+                <input id="map-height-input" type="number" min="1" max="80" value="20" />
+              </label>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Tools</h2>
+            </div>
+            <div id="tool-palette" class="tool-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Terrain</h2>
+            </div>
+            <div id="terrain-palette" class="choice-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Features</h2>
+            </div>
+            <div id="overlay-palette" class="choice-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Routes</h2>
+            </div>
+            <div id="edge-palette" class="choice-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Custom Symbols</h2>
+            </div>
+            <label class="field">
+              <span>Symbol name</span>
+              <input id="custom-symbol-name-input" type="text" placeholder="Ancient ruin" />
+            </label>
+            <label class="field">
+              <span>Category</span>
+              <input id="custom-symbol-category-input" type="text" value="Custom" />
+            </label>
+            <button id="import-symbol-button" class="action-button full-width">Import SVG or PNG</button>
+            <div id="custom-symbol-palette" class="choice-grid compact-grid empty-state-grid">
+              <p class="muted">No custom symbols yet.</p>
+            </div>
+          </section>
+        </aside>
+
+        <section class="canvas-panel">
+          <div class="canvas-header">
+            <div class="canvas-title-group">
+              <h2 id="project-title">Untitled Map</h2>
+              <p id="project-subtitle">20 x 20 hex map</p>
+            </div>
+            <div class="canvas-actions">
+              <button id="reset-view-button" class="canvas-action-button" type="button">Reset View</button>
+              <span id="canvas-activation-indicator" class="canvas-activation-indicator">Map inactive</span>
+            </div>
+            <div class="canvas-help">
+              <span>Click map to activate</span>
+              <span>Wheel to zoom</span>
+              <span>Space + drag to pan</span>
+              <span>Route tool: click two neighboring hexes</span>
+            </div>
+          </div>
+          <div id="canvas-container" class="canvas-container">
+            <canvas id="map-canvas" tabindex="0"></canvas>
+          </div>
+        </section>
+
+        <aside class="sidebar right-sidebar">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Inspector</h2>
+            </div>
+            <div id="inspector-content" class="stacked-content">
+              <p class="muted">Select a hex to inspect it.</p>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Project</h2>
+            </div>
+            <div class="metadata-list">
+              <div class="metadata-row">
+                <span>Status</span>
+                <strong id="dirty-indicator">Saved</strong>
+              </div>
+              <div class="metadata-row">
+                <span>History</span>
+                <strong id="history-indicator">0 undo / 0 redo</strong>
+              </div>
+              <div class="metadata-row">
+                <span>Custom symbols</span>
+                <strong id="custom-symbol-count">0</strong>
+              </div>
+              <div class="metadata-row">
+                <span>File</span>
+                <strong id="file-indicator">Not saved yet</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Usage</h2>
+            </div>
+            <ul class="usage-list">
+              <li>Terrain tool paints the selected terrain.</li>
+              <li>Feature tool toggles the selected built-in overlay.</li>
+              <li>Custom tool toggles the selected imported symbol.</li>
+              <li>Clear tool resets a hex and removes connected routes.</li>
+              <li>Route tool toggles river, path, or track between neighbors.</li>
+            </ul>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="statusbar">
+        <span id="status-tool">Tool: terrain</span>
+        <span id="status-hover">Hover: none</span>
+        <span id="status-zoom">Zoom: 100%</span>
+        <span id="status-message">Ready.</span>
+      </footer>
+    </div>
+
+    <input id="project-file-input" type="file" accept=".json,.hexmap.json,application/json" hidden />
+    <input id="symbol-file-input" type="file" accept=".svg,.png,image/svg+xml,image/png" hidden />
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

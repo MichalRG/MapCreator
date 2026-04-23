@@ -4,7 +4,11 @@ export function cellKey(col, row) {
   return `${col},${row}`;
 }
 
-export function buildEmptyCells(width, height) {
+function getLayout(project) {
+  return project?.metadata?.gridLayout || "hex-pointy";
+}
+
+export function buildEmptyCells(width, height, defaultTerrain = "plains") {
   const cells = [];
 
   for (let row = 0; row < height; row += 1) {
@@ -12,7 +16,7 @@ export function buildEmptyCells(width, height) {
       cells.push({
         col,
         row,
-        terrain: "plains",
+        terrain: defaultTerrain,
         overlays: [],
         customPlacementIds: []
       });
@@ -52,7 +56,11 @@ export function axialToOffset(q, r) {
   };
 }
 
-export function areAdjacent(a, b) {
+export function areAdjacent(project, a, b) {
+  if (getLayout(project) === "square") {
+    return Math.abs(a.col - b.col) + Math.abs(a.row - b.row) === 1;
+  }
+
   const axialA = offsetToAxial(a.col, a.row);
   const axialB = offsetToAxial(b.col, b.row);
   const dq = Math.abs(axialA.q - axialB.q);
@@ -72,14 +80,14 @@ export function edgeKey(type, a, b) {
   return `${type}:${cellKey(first.col, first.row)}:${cellKey(second.col, second.row)}`;
 }
 
-export function getHexCenter(col, row, size) {
+function getHexCenter(col, row, size) {
   return {
     x: size * SQRT3 * (col + 0.5 * (row & 1)),
     y: size * 1.5 * row
   };
 }
 
-export function getHexPoints(col, row, size) {
+function getHexPoints(col, row, size) {
   const center = getHexCenter(col, row, size);
   const points = [];
 
@@ -92,6 +100,33 @@ export function getHexPoints(col, row, size) {
   }
 
   return points;
+}
+
+function getSquareCenter(col, row, size) {
+  return {
+    x: col * size + size / 2,
+    y: row * size + size / 2
+  };
+}
+
+function getSquarePoints(col, row, size) {
+  const x = col * size;
+  const y = row * size;
+
+  return [
+    { x, y },
+    { x: x + size, y },
+    { x: x + size, y: y + size },
+    { x, y: y + size }
+  ];
+}
+
+export function getCellCenter(project, col, row, size) {
+  return getLayout(project) === "square" ? getSquareCenter(col, row, size) : getHexCenter(col, row, size);
+}
+
+export function getCellPoints(project, col, row, size) {
+  return getLayout(project) === "square" ? getSquarePoints(col, row, size) : getHexPoints(col, row, size);
 }
 
 function cubeRound(q, r) {
@@ -118,14 +153,36 @@ function cubeRound(q, r) {
   return { q: rx, r: rz };
 }
 
-export function worldToCellWithSize(worldX, worldY, size) {
+function worldToHexCell(worldX, worldY, size) {
   const q = ((SQRT3 / 3) * worldX - worldY / 3) / size;
   const r = ((2 / 3) * worldY) / size;
   const rounded = cubeRound(q, r);
   return axialToOffset(rounded.q, rounded.r);
 }
 
+export function worldToCell(project, worldX, worldY, size) {
+  if (getLayout(project) === "square") {
+    return {
+      col: Math.floor(worldX / size),
+      row: Math.floor(worldY / size)
+    };
+  }
+
+  return worldToHexCell(worldX, worldY, size);
+}
+
 export function getMapBounds(project, size) {
+  if (getLayout(project) === "square") {
+    return {
+      minX: 0,
+      minY: 0,
+      maxX: project.metadata.width * size,
+      maxY: project.metadata.height * size,
+      width: project.metadata.width * size,
+      height: project.metadata.height * size
+    };
+  }
+
   const width = project.metadata.width;
   const height = project.metadata.height;
 

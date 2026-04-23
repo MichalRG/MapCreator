@@ -7,6 +7,15 @@ function triggerDownload(blob, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+const PROJECT_FILE_TYPES = [
+  {
+    description: "Map Creator project",
+    accept: {
+      "application/json": [".json", ".hexmap.json", ".cavemap.json", ".mapcreator.json", ".caveforge.json"]
+    }
+  }
+];
+
 export async function saveTextFile({ contents, suggestedName, handle }) {
   if (handle) {
     const writable = await handle.createWritable();
@@ -18,14 +27,7 @@ export async function saveTextFile({ contents, suggestedName, handle }) {
   if ("showSaveFilePicker" in window) {
     const nextHandle = await window.showSaveFilePicker({
       suggestedName,
-      types: [
-        {
-          description: "Hex map project",
-          accept: {
-            "application/json": [".json", ".hexmap.json"]
-          }
-        }
-      ]
+      types: PROJECT_FILE_TYPES
     });
 
     const writable = await nextHandle.createWritable();
@@ -73,14 +75,7 @@ export async function openProjectFile(fallbackInput) {
   if ("showOpenFilePicker" in window) {
     const [handle] = await window.showOpenFilePicker({
       multiple: false,
-      types: [
-        {
-          description: "Hex map project",
-          accept: {
-            "application/json": [".json", ".hexmap.json"]
-          }
-        }
-      ]
+      types: PROJECT_FILE_TYPES
     });
 
     if (!handle) {

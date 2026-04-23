@@ -1,6 +1,9 @@
-# Map Creator
+# Cave Map Creator
 
-Local hex map editor that runs in the browser with a small Node static server.
+Local browser app with two editor modes:
+
+- `Grid Maps + Grid Caves` for the original tile-based world and cave workflow
+- `Freeform Cave Draft` for blank-page cave drawing closer to a Dungeondraft-style workflow
 
 ## Run
 
@@ -10,18 +13,20 @@ npm.cmd start
 
 Then open `http://localhost:4173`.
 
-## Features
+## What It Does
 
-- Pointy-top hex maps with preset sizes and custom dimensions
-- Terrain painting for plains, forest, mountains, and swamp
-- Built-in overlays for village, stronghold, city, cave, tower, and special place
-- Edge features for rivers, paths, and tracks
-- Custom symbol import from local SVG or PNG files
-- Undo/redo
-- Project save/load as `.hexmap.json`
-- PNG export
+- Grid mode supports world hex maps and grid cave maps with terrain, built-in features, routes or connections, custom symbols, save/load, undo/redo, and PNG export
+- Freeform cave mode supports `Floor`, `Wall`, `Water`, `Lava`, and `Chasm` brushes
+- Freeform cave mode includes built-in encounter details such as stalagmites, crystals, mushrooms, nests, camp sites, treasure, and entrances
+- Custom detail import from local `SVG` or `PNG`
+- Pan and zoom canvas navigation in both modes
+- Save and reopen editable projects for both modes
+- Export presentation PNGs
 
 ## Notes
 
-- The environment here does not include Rust, so this implementation ships as a local web app instead of a Tauri desktop wrapper.
-- Custom symbols are stored inside the project file as data URLs, so reopening a project does not depend on the original image path.
+- This is a static web app served by the included Node server.
+- Freeform cave projects save as `.caveforge.json`.
+- Grid projects keep the existing `.hexmap.json` and `.cavemap.json` formats.
+- Older version 2 grid-based cave projects are intentionally not loaded into the freeform editor mode.
+- Imported detail images are embedded into the saved project file as data URLs.

@@ -1,4 +1,5 @@
 import { drawBuiltinAsset } from "./cave-assets.js";
+import { getPaintLayers } from "./cave-project.js";
 
 function clampAlpha(value) {
   return Math.max(0, Math.min(1, value));
@@ -490,41 +491,60 @@ function drawMergedPaint(ctx, strokes) {
   });
 }
 
-function renderPaintBlock(ctx, strokes) {
-  const mergedStrokes = strokes.filter((stroke) => stroke.mergeTouches);
-  const standaloneStrokes = strokes.filter((stroke) => !stroke.mergeTouches);
-
-  if (mergedStrokes.length) {
-    drawMergedPaint(ctx, mergedStrokes);
-  }
-
-  standaloneStrokes.forEach((stroke) => drawStroke(ctx, stroke));
+function strokeGroupKey(stroke) {
+  return `${floorFamilyTool(stroke.tool) ? "floor-family" : stroke.tool}|${stroke.size}|${stroke.opacity}`;
 }
 
-function drawPaintLayer(ctx, project) {
+function renderPaintSequence(ctx, strokes) {
+  let mergeBatch = [];
+  let activeGroupKey = null;
+
+  function flushMergeBatch() {
+    if (!mergeBatch.length) {
+      return;
+    }
+    drawMergedPaint(ctx, mergeBatch);
+    mergeBatch = [];
+    activeGroupKey = null;
+  }
+
+  strokes.forEach((stroke) => {
+    if (stroke.tool === "erase") {
+      flushMergeBatch();
+      drawEraseStroke(ctx, stroke);
+      return;
+    }
+
+    if (!stroke.mergeTouches) {
+      flushMergeBatch();
+      drawStroke(ctx, stroke);
+      return;
+    }
+
+    const nextGroupKey = strokeGroupKey(stroke);
+    if (mergeBatch.length && nextGroupKey !== activeGroupKey) {
+      flushMergeBatch();
+    }
+
+    mergeBatch.push(stroke);
+    activeGroupKey = nextGroupKey;
+  });
+
+  flushMergeBatch();
+}
+
+function drawPaintLayers(ctx, project) {
   const paintCanvas = document.createElement("canvas");
   paintCanvas.width = Math.max(1, Math.ceil(project.metadata.width));
   paintCanvas.height = Math.max(1, Math.ceil(project.metadata.height));
   const paintCtx = paintCanvas.getContext("2d");
 
-  let pendingPaintStrokes = [];
-
-  project.strokes.forEach((stroke) => {
-    if (stroke.tool === "erase") {
-      if (pendingPaintStrokes.length) {
-        renderPaintBlock(paintCtx, pendingPaintStrokes);
-        pendingPaintStrokes = [];
-      }
-      drawEraseStroke(paintCtx, stroke);
+  getPaintLayers(project).forEach((layer) => {
+    if (!layer.visible || !Array.isArray(layer.strokes) || !layer.strokes.length) {
       return;
     }
-
-    pendingPaintStrokes.push(stroke);
+    renderPaintSequence(paintCtx, layer.strokes);
   });
-
-  if (pendingPaintStrokes.length) {
-    renderPaintBlock(paintCtx, pendingPaintStrokes);
-  }
 
   ctx.drawImage(paintCanvas, 0, 0);
 }
@@ -633,6 +653,16 @@ function drawStamp(ctx, stamp, imageCache, selectedStampId) {
   ctx.restore();
 }
 
+function drawStampsByLayer(ctx, project, imageCache, selectedStampId) {
+  const layerIds = getPaintLayers(project).map((layer) => layer.id);
+
+  layerIds.forEach((layerId) => {
+    project.stamps
+      .filter((stamp) => stamp.layerId === layerId)
+      .forEach((stamp) => drawStamp(ctx, stamp, imageCache, selectedStampId));
+  });
+}
+
 function drawPaintPreview(ctx, hoverPoint, brushSize, tool) {
   if (!hoverPoint) {
     return;
@@ -681,12 +711,51 @@ function drawDetailPreview(ctx, hoverPoint, selectedAsset) {
   ctx.restore();
 }
 
+function drawLinePreview(ctx, preview) {
+  if (!preview?.start || !preview?.end) {
+    return;
+  }
+
+  const palette = {
+    floor: "rgba(244, 211, 162, 0.78)",
+    wall: "rgba(170, 152, 133, 0.74)",
+    water: "rgba(132, 210, 255, 0.78)",
+    lava: "rgba(255, 161, 98, 0.82)",
+    chasm: "rgba(244, 235, 210, 0.72)",
+    erase: "rgba(255, 146, 146, 0.82)"
+  };
+
+  const color = palette[preview.tool] || "rgba(255, 255, 255, 0.68)";
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(2, preview.size * 0.16);
+  ctx.lineCap = "round";
+  ctx.setLineDash([14, 10]);
+  ctx.beginPath();
+  ctx.moveTo(preview.start.x, preview.start.y);
+  ctx.lineTo(preview.end.x, preview.end.y);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  ctx.arc(preview.start.x, preview.start.y, Math.max(4, preview.size * 0.08), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.beginPath();
+  ctx.arc(preview.end.x, preview.end.y, Math.max(5, preview.size * 0.1), 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function pointInPage(project, point) {
   return point && point.x >= 0 && point.y >= 0 && point.x <= project.metadata.width && point.y <= project.metadata.height;
 }
 
 function drawProject(ctx, options) {
-  const { project, imageCache, selectedStampId, hoverPoint, selectedTool, floorVariant, brushSize, detailPreview } = options;
+  const { project, imageCache, selectedStampId, hoverPoint, selectedTool, floorVariant, brushSize, detailPreview, linePreview } = options;
 
   drawPage(ctx, project);
 
@@ -694,8 +763,8 @@ function drawProject(ctx, options) {
     drawGrid(ctx, project.metadata.width, project.metadata.height, project.metadata.gridSize);
   }
 
-  drawPaintLayer(ctx, project);
-  project.stamps.forEach((stamp) => drawStamp(ctx, stamp, imageCache, selectedStampId));
+  drawPaintLayers(ctx, project);
+  drawStampsByLayer(ctx, project, imageCache, selectedStampId);
 
   if (pointInPage(project, hoverPoint)) {
     if (["floor", "wall", "water", "lava", "chasm", "erase"].includes(selectedTool)) {
@@ -714,6 +783,10 @@ function drawProject(ctx, options) {
     } else if (selectedTool === "detail") {
       drawDetailPreview(ctx, hoverPoint, detailPreview);
     }
+  }
+
+  if (linePreview) {
+    drawLinePreview(ctx, linePreview);
   }
 }
 
@@ -751,7 +824,8 @@ export function drawExportCanvas(canvas, { project, imageCache, scale = 1.25 }) 
     hoverPoint: null,
     selectedTool: "none",
     brushSize: 0,
-    detailPreview: null
+    detailPreview: null,
+    linePreview: null
   });
   ctx.restore();
 }

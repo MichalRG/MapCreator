@@ -1,6 +1,41 @@
-const PROJECT_VERSION = 3;
+const PROJECT_VERSION = 5;
 const PROJECT_KIND = "cave-draft";
 const PROJECT_EXTENSION = ".caveforge.json";
+const PAINT_LAYER_COUNT = 5;
+
+function defaultLayerId(index) {
+  return `layer-${index + 1}`;
+}
+
+function defaultLayerName(index) {
+  return `Layer ${index + 1}`;
+}
+
+function createPaintLayer(index) {
+  return {
+    id: defaultLayerId(index),
+    name: defaultLayerName(index),
+    visible: true,
+    strokes: []
+  };
+}
+
+export function createPaintLayers() {
+  return Array.from({ length: PAINT_LAYER_COUNT }, (_, index) => createPaintLayer(index));
+}
+
+export function getPaintLayers(project) {
+  return Array.isArray(project?.paintLayers) ? project.paintLayers : [];
+}
+
+export function getPaintLayer(project, layerId) {
+  const layers = getPaintLayers(project);
+  return layers.find((layer) => layer.id === layerId) || layers[0] || null;
+}
+
+export function getAllPaintStrokes(project) {
+  return getPaintLayers(project).flatMap((layer) => layer.strokes || []);
+}
 
 export function cloneProject(project) {
   return JSON.parse(JSON.stringify(project));
@@ -22,7 +57,7 @@ export function createProject({ width = 2400, height = 1600, name = "Untitled Ca
       showGrid: true,
       snapToGrid: false
     },
-    strokes: [],
+    paintLayers: createPaintLayers(),
     stamps: [],
     customAssets: []
   };
@@ -55,11 +90,12 @@ function normalizeStroke(stroke) {
   };
 }
 
-function normalizeStamp(stamp) {
+function normalizeStamp(stamp, index, defaultLayerIdValue = defaultLayerId(0)) {
   return {
     id: String(stamp.id),
     assetKind: stamp.assetKind === "custom" ? "custom" : "builtin",
     assetId: String(stamp.assetId),
+    layerId: String(stamp.layerId || defaultLayerIdValue),
     x: Number(stamp.x),
     y: Number(stamp.y),
     size: Number(stamp.size),
@@ -76,6 +112,27 @@ function normalizeCustomAsset(asset) {
   };
 }
 
+function normalizePaintLayer(layer, index) {
+  return {
+    id: String(layer?.id || defaultLayerId(index)),
+    name: String(layer?.name || defaultLayerName(index)),
+    visible: layer?.visible !== undefined ? Boolean(layer.visible) : true,
+    strokes: Array.isArray(layer?.strokes) ? layer.strokes.map(normalizeStroke) : []
+  };
+}
+
+function normalizePaintLayers(project) {
+  const normalizedLayers = createPaintLayers();
+
+  if (project.version === 3) {
+    normalizedLayers[0].strokes = Array.isArray(project.strokes) ? project.strokes.map(normalizeStroke) : [];
+    return normalizedLayers;
+  }
+
+  const sourceLayers = Array.isArray(project.paintLayers) ? project.paintLayers : [];
+  return normalizedLayers.map((layer, index) => normalizePaintLayer(sourceLayers[index] || layer, index));
+}
+
 export function normalizeProject(project) {
   if (!project || typeof project !== "object") {
     throw new Error("Project is missing.");
@@ -85,9 +142,12 @@ export function normalizeProject(project) {
     throw new Error("Grid cave projects from the older editor are not supported by the freeform cave draft tool.");
   }
 
-  if (project.version !== PROJECT_VERSION || project.kind !== PROJECT_KIND) {
+  if ((project.version !== 3 && project.version !== 4 && project.version !== PROJECT_VERSION) || project.kind !== PROJECT_KIND) {
     throw new Error("Unsupported project version.");
   }
+
+  const paintLayers = normalizePaintLayers(project);
+  const fallbackLayerId = paintLayers[0]?.id || defaultLayerId(0);
 
   return {
     version: PROJECT_VERSION,
@@ -102,8 +162,8 @@ export function normalizeProject(project) {
       showGrid: Boolean(project.metadata?.showGrid),
       snapToGrid: Boolean(project.metadata?.snapToGrid)
     },
-    strokes: Array.isArray(project.strokes) ? project.strokes.map(normalizeStroke) : [],
-    stamps: Array.isArray(project.stamps) ? project.stamps.map(normalizeStamp) : [],
+    paintLayers,
+    stamps: Array.isArray(project.stamps) ? project.stamps.map((stamp, index) => normalizeStamp(stamp, index, fallbackLayerId)) : [],
     customAssets: Array.isArray(project.customAssets) ? project.customAssets.map(normalizeCustomAsset) : []
   };
 }
@@ -129,8 +189,17 @@ export function validateProjectShape(project) {
     throw new Error("Project dimensions are too small.");
   }
 
-  if (!Array.isArray(project.strokes) || !Array.isArray(project.stamps) || !Array.isArray(project.customAssets)) {
+  if (!Array.isArray(project.paintLayers) || !Array.isArray(project.stamps) || !Array.isArray(project.customAssets)) {
     throw new Error("Project data is incomplete.");
+  }
+
+  if (project.paintLayers.length !== PAINT_LAYER_COUNT) {
+    throw new Error("Project paint layers are invalid.");
+  }
+
+  const validLayerIds = new Set(project.paintLayers.map((layer) => layer.id));
+  if (project.stamps.some((stamp) => !validLayerIds.has(stamp.layerId))) {
+    throw new Error("Project detail layers are invalid.");
   }
 
   return true;

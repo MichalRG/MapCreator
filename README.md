@@ -16,7 +16,7 @@ Then open `http://localhost:4173`.
 ## What It Does
 
 - Grid mode supports world hex maps and grid cave maps with terrain, built-in features, routes or connections, custom symbols, save/load, undo/redo, and PNG export
-- Freeform cave mode supports `Floor`, `Wall`, `Water`, `Lava`, and `Chasm` brushes
+- Freeform cave mode supports `Floor`, `Wall`, `Water`, `Lava`, and `Chasm` brushes across 5 layers, and placed details follow the selected layer too
 - Freeform cave mode includes built-in encounter details such as stalagmites, crystals, mushrooms, nests, camp sites, treasure, and entrances
 - Custom detail import from local `SVG` or `PNG`
 - Pan and zoom canvas navigation in both modes

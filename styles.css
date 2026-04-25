@@ -255,6 +255,13 @@ select {
   color: var(--muted);
 }
 
+.field-help {
+  margin: -4px 0 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: rgba(226, 212, 187, 0.7);
+}
+
 .field input,
 .field select {
   width: 100%;

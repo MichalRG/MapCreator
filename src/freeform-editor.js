@@ -2,6 +2,9 @@ import { BUILTIN_ASSETS, getBuiltinAsset } from "./cave-assets.js";
 import {
   cloneProject,
   createProject,
+  getAllPaintStrokes,
+  getPaintLayer,
+  getPaintLayers,
   getSuggestedPngName,
   getSuggestedProjectName,
   normalizeProject,
@@ -103,6 +106,13 @@ function template() {
             <div class="panel-heading">
               <h2>Brush</h2>
             </div>
+
+            <label class="field">
+              <span>Active layer</span>
+              <select data-role="paint-layer-select"></select>
+            </label>
+
+            <p class="field-help">Layer 1 draws first. Layer 5 stays on top. Paint and placed details use the selected layer.</p>
 
             <label class="field">
               <span>Brush size</span>
@@ -263,6 +273,7 @@ export function mountFreeformEditor(container) {
 
   const state = {
     project: createProject(),
+    activePaintLayerId: "layer-1",
     selectedTool: "floor",
     selectedAssetKind: "builtin",
     selectedAssetId: BUILTIN_ASSETS[0].id,
@@ -294,11 +305,14 @@ export function mountFreeformEditor(container) {
     },
     transactionSnapshot: null,
     imageCache: new Map(),
+    paintLineAnchor: null,
     statusMessage: "Ready."
   };
 
   let activeMode = false;
   let spacePressed = false;
+  let shiftPressed = false;
+  let angleConstraintPressed = false;
 
   const elements = {
     canvas: byRole(container, "map-canvas"),
@@ -310,6 +324,7 @@ export function mountFreeformEditor(container) {
     mapWidthInput: byRole(container, "map-width-input"),
     mapHeightInput: byRole(container, "map-height-input"),
     applyPageButton: byRole(container, "apply-page-button"),
+    paintLayerSelect: byRole(container, "paint-layer-select"),
     brushSizeInput: byRole(container, "brush-size-input"),
     brushOpacityInput: byRole(container, "brush-opacity-input"),
     floorVariantSelect: byRole(container, "floor-variant-select"),
@@ -365,6 +380,22 @@ export function mountFreeformEditor(container) {
     return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
   }
 
+  function ensureActivePaintLayer() {
+    const fallbackLayer = getPaintLayers(state.project)[0] || null;
+    const activeLayer = getPaintLayer(state.project, state.activePaintLayerId);
+    state.activePaintLayerId = activeLayer?.id || fallbackLayer?.id || null;
+    return activeLayer || fallbackLayer;
+  }
+
+  function activePaintLayer() {
+    return ensureActivePaintLayer();
+  }
+
+  function orderedStamps() {
+    const layerIds = getPaintLayers(state.project).map((layer) => layer.id);
+    return layerIds.flatMap((layerId) => state.project.stamps.filter((stamp) => stamp.layerId === layerId));
+  }
+
   function clampToPage(point) {
     return {
       x: Math.max(0, Math.min(state.project.metadata.width, point.x)),
@@ -398,6 +429,46 @@ export function mountFreeformEditor(container) {
 
   function distance(a, b) {
     return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function setPaintLineAnchor(point) {
+    state.paintLineAnchor = point ? clampToPage(point) : null;
+  }
+
+  function resolveAngleConstrainedLineEnd(fromPoint, toPoint) {
+    const start = clampToPage(fromPoint);
+    const target = clampToPage(toPoint);
+    const dx = target.x - start.x;
+    const dy = target.y - start.y;
+    const length = Math.hypot(dx, dy);
+
+    if (!length) {
+      return start;
+    }
+
+    const snappedAngle = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+    const dirX = Math.cos(snappedAngle);
+    const dirY = Math.sin(snappedAngle);
+    const { width, height } = state.project.metadata;
+    let maxLength = Number.POSITIVE_INFINITY;
+
+    if (Math.abs(dirX) > 1e-6) {
+      maxLength = Math.min(maxLength, dirX > 0 ? (width - start.x) / dirX : (0 - start.x) / dirX);
+    }
+
+    if (Math.abs(dirY) > 1e-6) {
+      maxLength = Math.min(maxLength, dirY > 0 ? (height - start.y) / dirY : (0 - start.y) / dirY);
+    }
+
+    const resolvedLength = Math.max(0, Math.min(length, maxLength));
+    return {
+      x: start.x + dirX * resolvedLength,
+      y: start.y + dirY * resolvedLength
+    };
+  }
+
+  function resolvePaintLineEnd(fromPoint, toPoint, constrainAngle = false) {
+    return constrainAngle ? resolveAngleConstrainedLineEnd(fromPoint, toPoint) : clampToPage(toPoint);
   }
 
   function currentAssetSelection() {
@@ -522,7 +593,7 @@ export function mountFreeformEditor(container) {
   function updateProjectMeta() {
     elements.dirtyIndicator.textContent = state.isDirty ? "Unsaved changes" : "Saved";
     elements.historyIndicator.textContent = `${state.history.undoStack.length} undo / ${state.history.redoStack.length} redo`;
-    elements.strokeCount.textContent = String(state.project.strokes.length);
+    elements.strokeCount.textContent = String(getAllPaintStrokes(state.project).length);
     elements.stampCount.textContent = String(state.project.stamps.length);
     elements.customAssetCount.textContent = String(state.project.customAssets.length);
     elements.fileIndicator.textContent = projectFileLabel();
@@ -531,12 +602,17 @@ export function mountFreeformEditor(container) {
   }
 
   function updateBrushControls() {
+    ensureActivePaintLayer();
+    elements.paintLayerSelect.value = state.activePaintLayerId || "";
     elements.floorVariantSelect.disabled = state.selectedTool !== "floor";
   }
 
   function updateStatusBar() {
     const tool = TOOL_DEFS.find((entry) => entry.id === state.selectedTool) || TOOL_DEFS[0];
-    elements.statusTool.textContent = `Tool: ${tool.label}`;
+    const layer = activePaintLayer();
+    const layerAwareTools = SURFACE_BRUSH_TOOLS.has(state.selectedTool) || state.selectedTool === "detail";
+    const layerSuffix = layerAwareTools && layer ? ` | ${layer.name}` : "";
+    elements.statusTool.textContent = `Tool: ${tool.label}${layerSuffix}`;
     elements.statusHover.textContent = pointInPage(state.hoverPoint)
       ? `Cursor: ${Math.round(state.hoverPoint.x)}, ${Math.round(state.hoverPoint.y)}`
       : "Cursor: off page";
@@ -546,6 +622,8 @@ export function mountFreeformEditor(container) {
   function rebuildUsageList() {
     const tips = [
       "Use Floor to block out the cavern silhouette, then switch Floor Variant to Raised or Lowered where you want elevation markers.",
+      "Switch paint layers when one surface needs to sit cleanly above another. Layer 5 always renders above Layer 1.",
+      "Hold Shift and click with a paint brush to draw a straight segment from the previous brush endpoint. Add Ctrl to lock it to 45-degree angles.",
       "Turn on Merge Touching Brush Marks if you want touching strokes of the same paint type to read as one surface.",
       "Water, Lava, and Chasm brushes work as fast encounter overlays on top of carved floor.",
       "Use Rubber to carve away parts of any painted surface without deleting placed details.",
@@ -622,6 +700,21 @@ export function mountFreeformEditor(container) {
     });
   }
 
+  function moveSelectedStampToActiveLayer() {
+    const stamp = selectedStamp();
+    const layer = activePaintLayer();
+    if (!stamp || !layer || stamp.layerId === layer.id) {
+      return;
+    }
+
+    applyMutation(`Moved detail to ${layer.name}.`, (project) => {
+      const projectStamp = project.stamps.find((entry) => entry.id === stamp.id);
+      if (projectStamp) {
+        projectStamp.layerId = layer.id;
+      }
+    });
+  }
+
   function rebuildInspector() {
     elements.inspectorContent.innerHTML = "";
     const stamp = selectedStamp();
@@ -643,11 +736,16 @@ export function mountFreeformEditor(container) {
       }
 
       const stats = addInspectorCard("Composition");
+      const allStrokes = getAllPaintStrokes(state.project);
+      const activeLayerStrokes = activePaintLayer()?.strokes || [];
       [
-        ["Floor strokes", state.project.strokes.filter((stroke) => stroke.tool === "floor").length],
-        ["Water strokes", state.project.strokes.filter((stroke) => stroke.tool === "water").length],
-        ["Lava strokes", state.project.strokes.filter((stroke) => stroke.tool === "lava").length],
-        ["Chasm strokes", state.project.strokes.filter((stroke) => stroke.tool === "chasm").length]
+        ["Active layer", activePaintLayer()?.name || "None"],
+        ["Active layer strokes", activeLayerStrokes.length],
+        ["Active layer details", state.project.stamps.filter((stamp) => stamp.layerId === activePaintLayer()?.id).length],
+        ["Floor strokes", allStrokes.filter((stroke) => stroke.tool === "floor").length],
+        ["Water strokes", allStrokes.filter((stroke) => stroke.tool === "water").length],
+        ["Lava strokes", allStrokes.filter((stroke) => stroke.tool === "lava").length],
+        ["Chasm strokes", allStrokes.filter((stroke) => stroke.tool === "chasm").length]
       ].forEach(([label, value]) => {
         const row = document.createElement("p");
         row.className = "muted";
@@ -665,6 +763,7 @@ export function mountFreeformEditor(container) {
 
     [
       `Asset: ${assetLabel}`,
+      `Layer: ${getPaintLayer(state.project, stamp.layerId)?.name || stamp.layerId}`,
       `Position: ${Math.round(stamp.x)}, ${Math.round(stamp.y)}`,
       `Size: ${Math.round(stamp.size)} px`,
       `Rotation: ${Math.round((stamp.rotation * 180) / Math.PI)} deg`
@@ -679,6 +778,7 @@ export function mountFreeformEditor(container) {
 
     [
       ["Duplicate", duplicateSelectedStamp],
+      ["Move To Active Layer", moveSelectedStampToActiveLayer],
       ["Bring To Front", () => moveSelectedStamp("front")],
       ["Send Backward", () => moveSelectedStamp("back")]
     ].forEach(([label, handler]) => {
@@ -716,10 +816,26 @@ export function mountFreeformEditor(container) {
     elements.pagePresetSelect.value = match?.id || "custom";
   }
 
+  function syncPaintLayerSelect() {
+    const layers = getPaintLayers(state.project);
+    const selectedLayer = ensureActivePaintLayer();
+    elements.paintLayerSelect.innerHTML = "";
+
+    layers.forEach((layer, index) => {
+      const option = document.createElement("option");
+      option.value = layer.id;
+      option.textContent = `${layer.name}${index === layers.length - 1 ? " (Top)" : index === 0 ? " (Base)" : ""}`;
+      elements.paintLayerSelect.append(option);
+    });
+
+    elements.paintLayerSelect.value = selectedLayer?.id || "";
+  }
+
   function syncFormWithProject() {
     elements.mapNameInput.value = state.project.metadata.name;
     elements.mapWidthInput.value = String(state.project.metadata.width);
     elements.mapHeightInput.value = String(state.project.metadata.height);
+    syncPaintLayerSelect();
     elements.brushSizeInput.value = String(state.brushSize);
     elements.brushOpacityInput.value = String(Math.round(state.brushOpacity * 100));
     elements.floorVariantSelect.value = state.floorVariant;
@@ -815,6 +931,7 @@ export function mountFreeformEditor(container) {
   }
 
   function render() {
+    ensureActivePaintLayer();
     updateProjectHeader();
     updateProjectMeta();
     updateBrushControls();
@@ -833,7 +950,20 @@ export function mountFreeformEditor(container) {
       selectedTool: state.selectedTool,
       floorVariant: state.floorVariant,
       brushSize: state.brushSize,
-      detailPreview: currentAssetSelection()
+      detailPreview: currentAssetSelection(),
+      linePreview:
+        shiftPressed &&
+        state.drag.mode !== "paint" &&
+        SURFACE_BRUSH_TOOLS.has(state.selectedTool) &&
+        state.paintLineAnchor &&
+        pointInPage(state.hoverPoint)
+          ? {
+              start: state.paintLineAnchor,
+              end: resolvePaintLineEnd(state.paintLineAnchor, state.hoverPoint, angleConstraintPressed),
+              tool: state.selectedTool,
+              size: state.brushSize
+            }
+          : null
     });
   }
 
@@ -866,8 +996,10 @@ export function mountFreeformEditor(container) {
   function resetEditorState({ preserveHandle = false } = {}) {
     state.history.undoStack = [];
     state.history.redoStack = [];
+    state.activePaintLayerId = getPaintLayers(state.project)[0]?.id || null;
     state.selectedStampId = null;
     state.hoverPoint = null;
+    state.paintLineAnchor = null;
     state.drag.mode = null;
     state.drag.activeStrokeId = null;
     state.transactionSnapshot = null;
@@ -911,7 +1043,9 @@ export function mountFreeformEditor(container) {
     const previous = state.history.undoStack.pop();
     state.history.redoStack.push(cloneProject(state.project));
     state.project = previous;
+    ensureActivePaintLayer();
     state.selectedStampId = state.project.stamps.some((stamp) => stamp.id === state.selectedStampId) ? state.selectedStampId : null;
+    state.paintLineAnchor = null;
     state.transactionSnapshot = null;
     state.isDirty = true;
     updateCustomImageCache();
@@ -928,7 +1062,9 @@ export function mountFreeformEditor(container) {
     const next = state.history.redoStack.pop();
     state.history.undoStack.push(cloneProject(state.project));
     state.project = next;
+    ensureActivePaintLayer();
     state.selectedStampId = state.project.stamps.some((stamp) => stamp.id === state.selectedStampId) ? state.selectedStampId : null;
+    state.paintLineAnchor = null;
     state.transactionSnapshot = null;
     state.isDirty = true;
     updateCustomImageCache();
@@ -938,7 +1074,7 @@ export function mountFreeformEditor(container) {
   }
 
   function appendPointToActiveStroke(point) {
-    const stroke = state.project.strokes.find((entry) => entry.id === state.drag.activeStrokeId);
+    const stroke = getAllPaintStrokes(state.project).find((entry) => entry.id === state.drag.activeStrokeId);
     if (!stroke) {
       return;
     }
@@ -949,6 +1085,7 @@ export function mountFreeformEditor(container) {
 
     if (!lastPoint || distance(lastPoint, clamped) >= minDistance) {
       stroke.points.push(clamped);
+      setPaintLineAnchor(clamped);
       touchProject(state.project);
       state.isDirty = true;
       render();
@@ -957,6 +1094,13 @@ export function mountFreeformEditor(container) {
 
   function beginPaint(point) {
     beginTransaction();
+    const layer = activePaintLayer();
+    if (!layer) {
+      setStatus("No paint layer is available.");
+      cancelTransaction();
+      return;
+    }
+
     const stroke = {
       id: makeId("stroke"),
       tool: state.selectedTool,
@@ -967,12 +1111,45 @@ export function mountFreeformEditor(container) {
       points: [clampToPage(point)]
     };
 
-    state.project.strokes.push(stroke);
+    layer.strokes.push(stroke);
     state.drag.activeStrokeId = stroke.id;
     state.selectedStampId = null;
+    setPaintLineAnchor(stroke.points[stroke.points.length - 1]);
     touchProject(state.project);
     state.isDirty = true;
     render();
+  }
+
+  function paintStraightLine(fromPoint, toPoint) {
+    beginTransaction();
+    const layer = activePaintLayer();
+    if (!layer) {
+      setStatus("No paint layer is available.");
+      cancelTransaction();
+      return;
+    }
+
+    const start = clampToPage(fromPoint);
+    const end = clampToPage(toPoint);
+    const stroke = {
+      id: makeId("stroke"),
+      tool: state.selectedTool,
+      floorVariant: state.selectedTool === "floor" ? state.floorVariant : "normal",
+      size: state.brushSize,
+      opacity: state.brushOpacity,
+      mergeTouches: state.selectedTool === "erase" ? false : state.connectPaint,
+      points: [start, end]
+    };
+
+    layer.strokes.push(stroke);
+    state.drag.activeStrokeId = null;
+    state.selectedStampId = null;
+    setPaintLineAnchor(end);
+    touchProject(state.project);
+    state.isDirty = true;
+
+    const tool = TOOL_DEFS.find((entry) => entry.id === state.selectedTool);
+    commitTransaction(`Painted ${tool?.label || "stroke"} line.`);
   }
 
   function placeDetail(point) {
@@ -987,10 +1164,12 @@ export function mountFreeformEditor(container) {
     const rotation = asset.assetKind === "custom" ? 0 : (Math.random() - 0.5) * 0.6;
 
     applyMutation(`Placed ${asset.label}.`, (project) => {
+      const layer = getPaintLayer(project, state.activePaintLayerId);
       project.stamps.push({
         id: makeId("stamp"),
         assetKind: asset.assetKind,
         assetId: asset.assetId,
+        layerId: layer?.id || getPaintLayers(project)[0]?.id || "layer-1",
         x: placement.x,
         y: placement.y,
         size,
@@ -1000,8 +1179,9 @@ export function mountFreeformEditor(container) {
   }
 
   function hitTestStamp(point) {
-    for (let index = state.project.stamps.length - 1; index >= 0; index -= 1) {
-      const stamp = state.project.stamps[index];
+    const stamps = orderedStamps();
+    for (let index = stamps.length - 1; index >= 0; index -= 1) {
+      const stamp = stamps[index];
       if (distance(point, stamp) <= stamp.size * 0.58) {
         return stamp;
       }
@@ -1073,6 +1253,10 @@ export function mountFreeformEditor(container) {
     }
 
     if (SURFACE_BRUSH_TOOLS.has(state.selectedTool) && event.button === 0) {
+      if (event.shiftKey && state.paintLineAnchor) {
+        paintStraightLine(state.paintLineAnchor, resolvePaintLineEnd(state.paintLineAnchor, world, event.ctrlKey || event.metaKey));
+        return;
+      }
       state.drag.mode = "paint";
       beginPaint(world);
       return;
@@ -1345,6 +1529,13 @@ export function mountFreeformEditor(container) {
     elements.undoButton.addEventListener("click", undo);
     elements.redoButton.addEventListener("click", redo);
 
+    elements.paintLayerSelect.addEventListener("change", () => {
+      state.activePaintLayerId = elements.paintLayerSelect.value;
+      const layer = activePaintLayer();
+      setStatus(`Painting on ${layer?.name || "paint layer"}.`);
+      render();
+    });
+
     elements.brushSizeInput.addEventListener("input", () => {
       state.brushSize = Number(elements.brushSizeInput.value);
       render();
@@ -1421,6 +1612,16 @@ export function mountFreeformEditor(container) {
         spacePressed = true;
       }
 
+      if (event.key === "Shift") {
+        shiftPressed = true;
+        render();
+      }
+
+      if (event.key === "Control" || event.key === "Meta") {
+        angleConstraintPressed = true;
+        render();
+      }
+
       if (event.key === "Escape") {
         deactivateCanvas();
         setStatus("Canvas interaction disabled.");
@@ -1458,6 +1659,16 @@ export function mountFreeformEditor(container) {
     });
 
     window.addEventListener("keyup", (event) => {
+      if (activeMode && event.key === "Shift") {
+        shiftPressed = false;
+        render();
+      }
+
+      if (activeMode && (event.key === "Control" || event.key === "Meta")) {
+        angleConstraintPressed = false;
+        render();
+      }
+
       if (activeMode && event.code === "Space") {
         spacePressed = false;
       }

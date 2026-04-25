@@ -1,4 +1,4 @@
-import { drawBuiltinAsset, drawBuiltinDoorCutout, isBuiltinDoorAsset } from "./cave-assets.js";
+import { drawBuiltinAsset, drawBuiltinDoorCutout, getBuiltinAsset, isBuiltinDoorAsset } from "./cave-assets.js";
 import { getStrokeSurfaceVariant } from "./cave-surface-variants.js";
 import { getPaintLayers } from "./cave-project.js";
 
@@ -1178,6 +1178,46 @@ function drawStamps(ctx, stamps, imageCache, selectedStampId) {
   stamps.forEach((stamp) => drawStamp(ctx, stamp, imageCache, selectedStampId));
 }
 
+function applyStampLightingToLayer(ctx, stamps) {
+  stamps.forEach((stamp) => {
+    if (stamp.assetKind !== "builtin") {
+      return;
+    }
+
+    const asset = getBuiltinAsset(stamp.assetId);
+    const light = asset.light;
+    if (!light?.radius) {
+      return;
+    }
+
+    const scale = asset.defaultSize ? stamp.size / asset.defaultSize : 1;
+    const radius = light.radius * scale;
+    const minX = stamp.x - radius;
+    const minY = stamp.y - radius;
+    const size = radius * 2;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "source-atop";
+    const outerGlow = ctx.createRadialGradient(stamp.x, stamp.y, radius * 0.08, stamp.x, stamp.y, radius);
+    outerGlow.addColorStop(0, light.innerColor || "rgba(255, 215, 126, 0.3)");
+    outerGlow.addColorStop(0.42, light.outerColor || "rgba(255, 144, 68, 0.16)");
+    outerGlow.addColorStop(1, "rgba(255, 144, 68, 0)");
+    ctx.fillStyle = outerGlow;
+    ctx.fillRect(minX, minY, size, size);
+    ctx.restore();
+
+    ctx.save();
+    ctx.globalCompositeOperation = "source-atop";
+    const coreGlow = ctx.createRadialGradient(stamp.x, stamp.y, 0, stamp.x, stamp.y, radius * 0.38);
+    coreGlow.addColorStop(0, "rgba(255, 238, 188, 0.24)");
+    coreGlow.addColorStop(0.65, "rgba(255, 196, 104, 0.08)");
+    coreGlow.addColorStop(1, "rgba(255, 196, 104, 0)");
+    ctx.fillStyle = coreGlow;
+    ctx.fillRect(stamp.x - radius * 0.38, stamp.y - radius * 0.38, radius * 0.76, radius * 0.76);
+    ctx.restore();
+  });
+}
+
 function drawLayerStack(ctx, project, imageCache, selectedStampId, layerSurface = null) {
   const resolvedLayerSurface = resolveLayerSurface(project, layerSurface);
   if (!resolvedLayerSurface) {
@@ -1188,14 +1228,17 @@ function drawLayerStack(ctx, project, imageCache, selectedStampId, layerSurface 
   const stampsByLayer = groupStampsByLayer(project);
 
   getPaintLayers(project).forEach((layer) => {
+    const layerStamps = stampsByLayer.get(layer.id) || [];
+
     if (layer.visible && Array.isArray(layer.strokes) && layer.strokes.length) {
       // Reset the offscreen surface per paint layer so erase strokes only cut into that layer.
       layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
       renderPaintSequence(layerCtx, layer.strokes);
+      applyStampLightingToLayer(layerCtx, layerStamps);
       ctx.drawImage(layerCanvas, 0, 0);
     }
 
-    drawStamps(ctx, stampsByLayer.get(layer.id) || [], imageCache, selectedStampId);
+    drawStamps(ctx, layerStamps, imageCache, selectedStampId);
   });
 }
 

@@ -112,12 +112,25 @@ export const BUILTIN_ASSETS = [
     category: "detail"
   },
   {
+    id: "bonfire_cold",
+    label: "Bonfire",
+    description: "Stone-ring bonfire with stacked logs and cold ash.",
+    accent: "#8b7666",
+    defaultSize: 84,
+    category: "variant-detail"
+  },
+  {
     id: "camp",
-    label: "Camp",
-    description: "Bedrolls and a guarded fire pit.",
+    label: "Bonfire",
+    description: "Stone-ring bonfire with active flame and warm light.",
     accent: "#f08f4e",
-    defaultSize: 82,
-    category: "detail"
+    defaultSize: 84,
+    category: "variant-detail",
+    light: {
+      radius: 170,
+      innerColor: "rgba(255, 215, 126, 0.32)",
+      outerColor: "rgba(255, 144, 68, 0.16)"
+    }
   },
   {
     id: "treasure",
@@ -347,6 +360,79 @@ function drawDoorLeaf(ctx, width, height, fill, stroke, plankStroke = null) {
   }
 }
 
+function drawBonfireBase(ctx, resolvedSize) {
+  const stoneSize = resolvedSize * 0.18;
+  [
+    [-0.34, 0.14, 0.98],
+    [-0.14, -0.22, 0.86],
+    [0.18, -0.18, 0.92],
+    [0.38, 0.12, 0.84],
+    [0.06, 0.3, 0.88],
+    [-0.24, 0.3, 0.8]
+  ].forEach(([x, y, scale], index) => {
+    drawRock(
+      ctx,
+      resolvedSize * x,
+      resolvedSize * y,
+      stoneSize * scale,
+      index % 2 === 0 ? "#988d82" : "#7f746a",
+      "#544a43",
+      (index - 2) * 0.18
+    );
+  });
+
+  ctx.fillStyle = "#2a201a";
+  ctx.beginPath();
+  ctx.ellipse(0, resolvedSize * 0.06, resolvedSize * 0.24, resolvedSize * 0.17, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#4e3424";
+  ctx.lineWidth = Math.max(3, resolvedSize * 0.08);
+  ctx.lineCap = "round";
+  [
+    [-0.16, 0.24, 0.18, -0.06],
+    [0.18, 0.22, -0.14, -0.08],
+    [-0.04, 0.28, 0.04, -0.12]
+  ].forEach(([x1, y1, x2, y2]) => {
+    ctx.beginPath();
+    ctx.moveTo(resolvedSize * x1, resolvedSize * y1);
+    ctx.lineTo(resolvedSize * x2, resolvedSize * y2);
+    ctx.stroke();
+  });
+
+  ctx.strokeStyle = "rgba(124, 92, 70, 0.48)";
+  ctx.lineWidth = Math.max(1.2, resolvedSize * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(-resolvedSize * 0.1, resolvedSize * 0.18);
+  ctx.lineTo(resolvedSize * 0.12, 0);
+  ctx.stroke();
+}
+
+function drawBonfireFlame(ctx, resolvedSize) {
+  const glow = ctx.createRadialGradient(0, resolvedSize * 0.04, resolvedSize * 0.04, 0, resolvedSize * 0.04, resolvedSize * 0.44);
+  glow.addColorStop(0, "rgba(255, 229, 162, 0.78)");
+  glow.addColorStop(0.45, "rgba(255, 167, 77, 0.34)");
+  glow.addColorStop(1, "rgba(255, 120, 44, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(-resolvedSize * 0.5, -resolvedSize * 0.44, resolvedSize, resolvedSize * 0.92);
+
+  ctx.beginPath();
+  ctx.moveTo(0, -resolvedSize * 0.22);
+  ctx.bezierCurveTo(resolvedSize * 0.12, -resolvedSize * 0.08, resolvedSize * 0.18, resolvedSize * 0.08, 0, resolvedSize * 0.22);
+  ctx.bezierCurveTo(-resolvedSize * 0.16, resolvedSize * 0.06, -resolvedSize * 0.12, -resolvedSize * 0.1, 0, -resolvedSize * 0.22);
+  ctx.closePath();
+  ctx.fillStyle = "#ff9b3f";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(0, -resolvedSize * 0.16);
+  ctx.bezierCurveTo(resolvedSize * 0.08, -resolvedSize * 0.04, resolvedSize * 0.08, resolvedSize * 0.04, 0, resolvedSize * 0.14);
+  ctx.bezierCurveTo(-resolvedSize * 0.09, 0, -resolvedSize * 0.08, -resolvedSize * 0.08, 0, -resolvedSize * 0.16);
+  ctx.closePath();
+  ctx.fillStyle = "#ffe2a0";
+  ctx.fill();
+}
+
 export function drawBuiltinDoorCutout(ctx, assetId, { size } = {}) {
   if (!isBuiltinDoorAsset(assetId)) {
     return false;
@@ -495,21 +581,17 @@ export function drawBuiltinAsset(ctx, assetId, { size, rotation = 0, alpha = 1 }
       ctx.fill();
       break;
 
-    case "camp":
-      ctx.fillStyle = "#805839";
-      ctx.fillRect(-resolvedSize * 0.34, resolvedSize * 0.06, resolvedSize * 0.26, resolvedSize * 0.16);
-      ctx.fillRect(resolvedSize * 0.08, resolvedSize * 0.02, resolvedSize * 0.28, resolvedSize * 0.18);
-      ctx.strokeStyle = "#4a3224";
-      ctx.lineWidth = Math.max(2, resolvedSize * 0.05);
+    case "bonfire_cold":
+      drawBonfireBase(ctx, resolvedSize);
+      ctx.fillStyle = "rgba(186, 180, 172, 0.72)";
       ctx.beginPath();
-      ctx.moveTo(-resolvedSize * 0.1, resolvedSize * 0.34);
-      ctx.lineTo(0, -resolvedSize * 0.1);
-      ctx.lineTo(resolvedSize * 0.12, resolvedSize * 0.34);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(0, resolvedSize * 0.08, resolvedSize * 0.16, 0, Math.PI * 2);
-      ctx.fillStyle = "#ff9c52";
+      ctx.ellipse(0, resolvedSize * 0.05, resolvedSize * 0.1, resolvedSize * 0.06, 0, 0, Math.PI * 2);
       ctx.fill();
+      break;
+
+    case "camp":
+      drawBonfireBase(ctx, resolvedSize);
+      drawBonfireFlame(ctx, resolvedSize);
       break;
 
     case "treasure":

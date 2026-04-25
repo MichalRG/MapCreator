@@ -64,6 +64,15 @@ const ENVIRONMENT_ASSET_DEFS = Object.freeze([
       Object.freeze({ id: "wood", label: "Wooden", assetId: "door_wood" }),
       Object.freeze({ id: "stone", label: "Stone", assetId: "door_stone" })
     ])
+  }),
+  Object.freeze({
+    id: "bonfire",
+    label: "Bonfire",
+    description: "Stone-ring bonfire for camps, rest points, and chamber hubs.",
+    variants: Object.freeze([
+      Object.freeze({ id: "cold", label: "Cold", assetId: "bonfire_cold" }),
+      Object.freeze({ id: "lit", label: "Lit", assetId: "camp" })
+    ])
   })
 ]);
 
@@ -195,22 +204,15 @@ function template() {
 
           <section class="panel">
             <div class="panel-heading">
-              <h2>Environment Elements</h2>
+              <h2>Built-In Details</h2>
             </div>
-            <p class="field-help">Place top-down structure elements like doors. They cut a doorway into placed walls when drawn on top.</p>
-            <div data-role="environment-asset-palette" class="asset-grid"></div>
+            <p class="field-help">Built-in details include encounter props plus structure elements like doors.</p>
+            <div data-role="asset-palette" class="asset-grid"></div>
 
             <label class="field">
               <span data-role="environment-variant-label">Element variant</span>
               <select data-role="environment-variant-select"></select>
             </label>
-          </section>
-
-          <section class="panel">
-            <div class="panel-heading">
-              <h2>Built-In Details</h2>
-            </div>
-            <div data-role="asset-palette" class="asset-grid"></div>
           </section>
 
           <section class="panel">
@@ -339,7 +341,8 @@ export function mountFreeformEditor(container) {
     brushShape: "circle",
     detailRotation: 0,
     environmentVariants: {
-      door: "wood"
+      door: "wood",
+      bonfire: "lit"
     },
     surfaceVariants: createInitialSurfaceVariants(),
     connectPaint: true,
@@ -403,7 +406,6 @@ export function mountFreeformEditor(container) {
     snapToGridInput: byRole(container, "snap-to-grid-input"),
     toolPalette: byRole(container, "tool-palette"),
     wallAssetPalette: byRole(container, "wall-asset-palette"),
-    environmentAssetPalette: byRole(container, "environment-asset-palette"),
     environmentVariantLabel: byRole(container, "environment-variant-label"),
     environmentVariantSelect: byRole(container, "environment-variant-select"),
     assetPalette: byRole(container, "asset-palette"),
@@ -1085,12 +1087,10 @@ export function mountFreeformEditor(container) {
       elements.wallAssetPalette.append(createAssetButton(asset, "builtin"));
     });
 
-    elements.environmentAssetPalette.innerHTML = "";
-    ENVIRONMENT_ASSET_DEFS.forEach((environment) => {
-      elements.environmentAssetPalette.append(createEnvironmentAssetButton(environment));
-    });
-
     elements.assetPalette.innerHTML = "";
+    ENVIRONMENT_ASSET_DEFS.forEach((environment) => {
+      elements.assetPalette.append(createEnvironmentAssetButton(environment));
+    });
     listBuiltinAssetsByCategory("detail").forEach((asset) => {
       elements.assetPalette.append(createAssetButton(asset, "builtin"));
     });

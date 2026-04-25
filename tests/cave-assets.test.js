@@ -12,8 +12,13 @@ test("listBuiltinAssetsByCategory exposes dedicated wall pieces separately from 
     listBuiltinAssetsByCategory("door").map((asset) => asset.id),
     ["door_wood", "door_stone"]
   );
+  assert.deepEqual(
+    listBuiltinAssetsByCategory("variant-detail").map((asset) => asset.id),
+    ["bonfire_cold", "camp"]
+  );
 
   assert.equal(listBuiltinAssetsByCategory("detail").some((asset) => asset.id === "treasure"), true);
+  assert.equal(listBuiltinAssetsByCategory("detail").some((asset) => asset.id === "camp"), false);
   assert.equal(listBuiltinAssetsByCategory("detail").some((asset) => asset.id === "wall_straight"), false);
   assert.equal(isBuiltinWallAsset("wall_corner"), true);
   assert.equal(isBuiltinDoorAsset("door_wood"), true);

@@ -37,7 +37,8 @@ Recommended development patterns for this repo:
 - Grid mode supports terrain painting, built-in features, route or connection drawing, custom symbols, save or load, undo or redo, and PNG export
 - Freeform cave mode supports `Floor`, `Wall`, `Water`, `Lava`, `Chasm`, and `Rubber` brushes across 5 paint layers
 - Freeform cave mode includes brush variants, `Circle` or `Square` brush shapes, merge-touching paint, and same-layer repaint after erase
-- Freeform cave mode includes built-in encounter details such as stalagmites, crystals, mushrooms, nests, camp sites, treasure, entrances, wall pieces, and doors
+- Freeform cave mode includes built-in encounter details such as stalagmites, crystals, mushrooms, nests, bonfires, treasure, entrances, wall pieces, and doors
+- Lit bonfires add a local warm glow to nearby painted cave surfaces on the same layer
 - Freeform cave details follow the selected layer and can be selected, moved, rotated, duplicated, reordered, or deleted
 - Custom detail import from local `SVG` or `PNG`
 - Pan and zoom canvas navigation in both modes

@@ -1,4 +1,4 @@
-import { BUILTIN_ASSETS, getBuiltinAsset } from "./cave-assets.js";
+import { BUILTIN_ASSETS, getBuiltinAsset, isBuiltinStructuralAsset, listBuiltinAssetsByCategory } from "./cave-assets.js";
 import {
   getDefaultSurfaceVariant,
   getSurfaceVariantLabel,
@@ -52,6 +52,20 @@ const TOOL_DEFS = [
 ];
 
 const SURFACE_BRUSH_TOOLS = new Set(["floor", "wall", "water", "lava", "chasm", "erase"]);
+const DEFAULT_BUILTIN_ASSET = listBuiltinAssetsByCategory("detail")[0] || BUILTIN_ASSETS[0];
+const WALL_ROTATION_STEP = (3 * Math.PI) / 180;
+const FULL_ROTATION = Math.PI * 2;
+const ENVIRONMENT_ASSET_DEFS = Object.freeze([
+  Object.freeze({
+    id: "door",
+    label: "Door",
+    description: "Top-down door that cuts neatly into a placed wall.",
+    variants: Object.freeze([
+      Object.freeze({ id: "wood", label: "Wooden", assetId: "door_wood" }),
+      Object.freeze({ id: "stone", label: "Stone", assetId: "door_stone" })
+    ])
+  })
+]);
 
 function createInitialSurfaceVariants() {
   return {
@@ -161,6 +175,27 @@ function template() {
                 <span>Snap details to grid</span>
               </label>
             </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Wall Pieces</h2>
+            </div>
+            <p class="field-help">Place snapped dungeon walls like the reference layout. Turn on Snap details to grid for clean joins.</p>
+            <div data-role="wall-asset-palette" class="asset-grid"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Environment Elements</h2>
+            </div>
+            <p class="field-help">Place top-down structure elements like doors. They cut a doorway into placed walls when drawn on top.</p>
+            <div data-role="environment-asset-palette" class="asset-grid"></div>
+
+            <label class="field">
+              <span data-role="environment-variant-label">Element variant</span>
+              <select data-role="environment-variant-select"></select>
+            </label>
           </section>
 
           <section class="panel">
@@ -290,9 +325,13 @@ export function mountFreeformEditor(container) {
     activePaintLayerId: "layer-1",
     selectedTool: "floor",
     selectedAssetKind: "builtin",
-    selectedAssetId: BUILTIN_ASSETS[0].id,
+    selectedAssetId: DEFAULT_BUILTIN_ASSET.id,
     brushSize: 96,
     brushOpacity: 1,
+    detailRotation: 0,
+    environmentVariants: {
+      door: "wood"
+    },
     surfaceVariants: createInitialSurfaceVariants(),
     connectPaint: true,
     selectedStampId: null,
@@ -353,6 +392,10 @@ export function mountFreeformEditor(container) {
     showGridInput: byRole(container, "show-grid-input"),
     snapToGridInput: byRole(container, "snap-to-grid-input"),
     toolPalette: byRole(container, "tool-palette"),
+    wallAssetPalette: byRole(container, "wall-asset-palette"),
+    environmentAssetPalette: byRole(container, "environment-asset-palette"),
+    environmentVariantLabel: byRole(container, "environment-variant-label"),
+    environmentVariantSelect: byRole(container, "environment-variant-select"),
     assetPalette: byRole(container, "asset-palette"),
     customAssetPalette: byRole(container, "custom-asset-palette"),
     customAssetNameInput: byRole(container, "custom-asset-name-input"),
@@ -494,6 +537,11 @@ export function mountFreeformEditor(container) {
     state.paintLineAnchor = point ? clampToPage(point) : null;
   }
 
+  function normalizeRotation(angle) {
+    const normalized = angle % FULL_ROTATION;
+    return normalized < 0 ? normalized + FULL_ROTATION : normalized;
+  }
+
   function resolveAngleConstrainedLineEnd(fromPoint, toPoint) {
     const start = clampToPage(fromPoint);
     const target = clampToPage(toPoint);
@@ -547,13 +595,59 @@ export function mountFreeformEditor(container) {
     }
 
     const asset = getBuiltinAsset(state.selectedAssetId);
+    const environmentAsset = ENVIRONMENT_ASSET_DEFS.find((entry) => entry.variants.some((variant) => variant.assetId === asset.id));
     return {
       assetKind: "builtin",
       assetId: asset.id,
-      label: asset.label,
-      description: asset.description,
-      size: asset.defaultSize
+      label: environmentAsset?.label || asset.label,
+      description: environmentAsset?.description || asset.description,
+      size: asset.defaultSize,
+      category: asset.category || "detail",
+      variantLabel: environmentAsset?.variants.find((variant) => variant.assetId === asset.id)?.label || null
     };
+  }
+
+  function activeWallPieceSelected() {
+    return state.selectedTool === "detail" && state.selectedAssetKind === "builtin" && isBuiltinStructuralAsset(state.selectedAssetId);
+  }
+
+  function selectedEnvironmentAssetDef() {
+    if (state.selectedAssetKind !== "builtin") {
+      return null;
+    }
+
+    return ENVIRONMENT_ASSET_DEFS.find((entry) => entry.variants.some((variant) => variant.assetId === state.selectedAssetId)) || null;
+  }
+
+  function resolveEnvironmentAssetId(environmentId, variantId) {
+    const environment = ENVIRONMENT_ASSET_DEFS.find((entry) => entry.id === environmentId);
+    return environment?.variants.find((variant) => variant.id === variantId)?.assetId || environment?.variants[0]?.assetId || null;
+  }
+
+  function syncEnvironmentVariantControls() {
+    const environment = selectedEnvironmentAssetDef();
+    if (!environment) {
+      elements.environmentVariantLabel.textContent = "Element variant";
+      elements.environmentVariantSelect.innerHTML = "";
+      elements.environmentVariantSelect.disabled = true;
+      return;
+    }
+
+    const signature = `${environment.id}|${environment.variants.map((variant) => variant.id).join(",")}`;
+    if (elements.environmentVariantSelect.dataset.signature !== signature) {
+      elements.environmentVariantSelect.innerHTML = "";
+      environment.variants.forEach((variant) => {
+        const option = document.createElement("option");
+        option.value = variant.id;
+        option.textContent = variant.label;
+        elements.environmentVariantSelect.append(option);
+      });
+      elements.environmentVariantSelect.dataset.signature = signature;
+    }
+
+    elements.environmentVariantLabel.textContent = `${environment.label} variant`;
+    elements.environmentVariantSelect.disabled = false;
+    elements.environmentVariantSelect.value = state.environmentVariants[environment.id] || environment.variants[0].id;
   }
 
   function selectedStamp() {
@@ -565,6 +659,11 @@ export function mountFreeformEditor(container) {
       element.classList.toggle("active", element.dataset.toolId === state.selectedTool);
     });
 
+    container.querySelectorAll("[data-environment-id]").forEach((element) => {
+      const active = selectedEnvironmentAssetDef()?.id === element.dataset.environmentId;
+      element.classList.toggle("active", active);
+    });
+
     container.querySelectorAll("[data-asset-kind][data-asset-id]").forEach((element) => {
       const active = element.dataset.assetKind === state.selectedAssetKind && element.dataset.assetId === state.selectedAssetId;
       element.classList.toggle("active", active);
@@ -573,6 +672,19 @@ export function mountFreeformEditor(container) {
 
   function setActiveAsset(kind, assetId) {
     state.selectedAssetKind = kind;
+    state.selectedAssetId = assetId;
+    state.selectedTool = "detail";
+    updatePaletteSelections();
+    render();
+  }
+
+  function setActiveEnvironmentAsset(environmentId) {
+    const assetId = resolveEnvironmentAssetId(environmentId, state.environmentVariants[environmentId]);
+    if (!assetId) {
+      return;
+    }
+
+    state.selectedAssetKind = "builtin";
     state.selectedAssetId = assetId;
     state.selectedTool = "detail";
     updatePaletteSelections();
@@ -666,6 +778,7 @@ export function mountFreeformEditor(container) {
     ensureActivePaintLayer();
     elements.paintLayerSelect.value = state.activePaintLayerId || "";
     syncSurfaceVariantOptions();
+    syncEnvironmentVariantControls();
   }
 
   function updateStatusBar() {
@@ -685,6 +798,7 @@ export function mountFreeformEditor(container) {
       "Use each brush variant to shift the material feel: Floor includes Raised, Lowered, Cracked Stone, and Parent Rock options, while Parent Rock, Water, Lava, and Chasm each include a more textured realistic option.",
       "Switch paint layers when one surface needs to sit cleanly above another. Layer 5 always renders above Layer 1.",
       "Hold Shift and click with a paint brush to draw a straight segment from the previous brush endpoint. Add Ctrl to lock it to 45-degree angles.",
+      "With a wall piece or door selected, use Ctrl + mouse wheel to rotate it before placing.",
       "Turn on Merge Touching Brush Marks if you want touching strokes of the same paint type to read as one surface.",
       "Parent Rock acts like the cave background inside a layer, so later floor and water shapes still render on top of it.",
       "Water, Lava, and Chasm brushes work as fast encounter overlays on top of carved floor.",
@@ -793,7 +907,7 @@ export function mountFreeformEditor(container) {
       if (state.selectedTool === "detail" && selectedAsset) {
         const detail = document.createElement("p");
         detail.className = "muted";
-        detail.textContent = `Selected detail: ${selectedAsset.label}`;
+        detail.textContent = selectedAsset.variantLabel ? `Selected detail: ${selectedAsset.label} (${selectedAsset.variantLabel})` : `Selected detail: ${selectedAsset.label}`;
         summary.append(detail);
       }
 
@@ -940,9 +1054,32 @@ export function mountFreeformEditor(container) {
     return button;
   }
 
+  function createEnvironmentAssetButton(environment) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choice-button";
+    button.dataset.environmentId = environment.id;
+    button.innerHTML = `<strong><span class="asset-swatch" style="--swatch:#b79b79"></span><span class="choice-label-text">${environment.label}</span></strong><span>${environment.description}</span>`;
+    button.addEventListener("click", () => {
+      setActiveEnvironmentAsset(environment.id);
+      setStatus(`Selected ${environment.label}.`);
+    });
+    return button;
+  }
+
   function rebuildAssetPalette() {
+    elements.wallAssetPalette.innerHTML = "";
+    listBuiltinAssetsByCategory("wall").forEach((asset) => {
+      elements.wallAssetPalette.append(createAssetButton(asset, "builtin"));
+    });
+
+    elements.environmentAssetPalette.innerHTML = "";
+    ENVIRONMENT_ASSET_DEFS.forEach((environment) => {
+      elements.environmentAssetPalette.append(createEnvironmentAssetButton(environment));
+    });
+
     elements.assetPalette.innerHTML = "";
-    BUILTIN_ASSETS.forEach((asset) => {
+    listBuiltinAssetsByCategory("detail").forEach((asset) => {
       elements.assetPalette.append(createAssetButton(asset, "builtin"));
     });
 
@@ -1017,6 +1154,7 @@ export function mountFreeformEditor(container) {
       brushSize: state.brushSize,
       layerSurface,
       detailPreview: currentAssetSelection(),
+      detailRotation: state.detailRotation,
       linePreview:
         shiftPressed &&
         state.drag.mode !== "paint" &&
@@ -1243,8 +1381,9 @@ export function mountFreeformEditor(container) {
     }
 
     const placement = snapPoint(clampToPage(point));
-    const size = asset.assetKind === "custom" ? asset.size : asset.size * (0.88 + Math.random() * 0.3);
-    const rotation = asset.assetKind === "custom" ? 0 : (Math.random() - 0.5) * 0.6;
+    const fixedStructuralPiece = asset.assetKind === "builtin" && (asset.category === "wall" || asset.category === "door");
+    const size = fixedStructuralPiece || asset.assetKind === "custom" ? asset.size : asset.size * (0.88 + Math.random() * 0.3);
+    const rotation = fixedStructuralPiece ? state.detailRotation : asset.assetKind === "custom" ? 0 : (Math.random() - 0.5) * 0.6;
 
     applyMutation(`Placed ${asset.label}.`, (project) => {
       const layer = getPaintLayer(project, state.activePaintLayerId);
@@ -1306,7 +1445,7 @@ export function mountFreeformEditor(container) {
 
     if (state.selectedAssetKind === "custom" && state.selectedAssetId === assetId) {
       state.selectedAssetKind = "builtin";
-      state.selectedAssetId = BUILTIN_ASSETS[0].id;
+      state.selectedAssetId = DEFAULT_BUILTIN_ASSET.id;
     }
 
     if (state.selectedStampId && !state.project.stamps.some((stamp) => stamp.id === state.selectedStampId)) {
@@ -1428,6 +1567,14 @@ export function mountFreeformEditor(container) {
 
   function handleWheel(event) {
     if (!activeMode || !state.isCanvasActive) {
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && activeWallPieceSelected()) {
+      event.preventDefault();
+      state.detailRotation = normalizeRotation(state.detailRotation + (event.deltaY < 0 ? -WALL_ROTATION_STEP : WALL_ROTATION_STEP));
+      setStatus(`Wall piece rotation: ${Math.round((state.detailRotation * 180) / Math.PI)} deg.`);
+      render();
       return;
     }
 
@@ -1639,6 +1786,22 @@ export function mountFreeformEditor(container) {
           )}.`
         );
       }
+      render();
+    });
+
+    elements.environmentVariantSelect.addEventListener("change", () => {
+      const environment = selectedEnvironmentAssetDef();
+      if (!environment) {
+        return;
+      }
+
+      state.environmentVariants[environment.id] = elements.environmentVariantSelect.value;
+      const nextAssetId = resolveEnvironmentAssetId(environment.id, elements.environmentVariantSelect.value);
+      if (nextAssetId) {
+        state.selectedAssetId = nextAssetId;
+      }
+      setStatus(`${environment.label} variant set to ${elements.environmentVariantSelect.selectedOptions[0]?.textContent || "Default"}.`);
+      updatePaletteSelections();
       render();
     });
 

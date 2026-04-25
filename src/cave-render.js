@@ -1,4 +1,4 @@
-import { drawBuiltinAsset } from "./cave-assets.js";
+import { drawBuiltinAsset, drawBuiltinDoorCutout, isBuiltinDoorAsset } from "./cave-assets.js";
 import { getStrokeSurfaceVariant } from "./cave-surface-variants.js";
 import { getPaintLayers } from "./cave-project.js";
 
@@ -1049,6 +1049,13 @@ function drawStamp(ctx, stamp, imageCache, selectedStampId) {
   if (stamp.assetKind === "custom") {
     drawCustomStamp(ctx, stamp, imageCache);
   } else {
+    if (isBuiltinDoorAsset(stamp.assetId)) {
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-out";
+      drawBuiltinDoorCutout(ctx, stamp.assetId, { size: stamp.size });
+      ctx.restore();
+    }
+
     drawBuiltinAsset(ctx, stamp.assetId, { size: stamp.size });
   }
 
@@ -1180,7 +1187,7 @@ function drawPaintPreview(ctx, hoverPoint, brushSize, tool, surfaceVariant = "no
   ctx.restore();
 }
 
-function drawDetailPreview(ctx, hoverPoint, selectedAsset) {
+function drawDetailPreview(ctx, hoverPoint, selectedAsset, rotation = 0) {
   if (!hoverPoint || !selectedAsset) {
     return;
   }
@@ -1197,6 +1204,7 @@ function drawDetailPreview(ctx, hoverPoint, selectedAsset) {
   } else {
     drawBuiltinAsset(ctx, selectedAsset.assetId, {
       size: selectedAsset.size,
+      rotation,
       alpha: 0.42
     });
   }
@@ -1248,7 +1256,7 @@ function pointInPage(project, point) {
 }
 
 function drawProject(ctx, options) {
-  const { project, imageCache, selectedStampId, hoverPoint, selectedTool, surfaceVariant = "normal", brushSize, detailPreview, linePreview, layerSurface } =
+  const { project, imageCache, selectedStampId, hoverPoint, selectedTool, surfaceVariant = "normal", brushSize, detailPreview, detailRotation = 0, linePreview, layerSurface } =
     options;
 
   drawPage(ctx, project);
@@ -1276,7 +1284,7 @@ function drawProject(ctx, options) {
         );
       }
     } else if (selectedTool === "detail") {
-      drawDetailPreview(ctx, hoverPoint, detailPreview);
+      drawDetailPreview(ctx, hoverPoint, detailPreview, detailRotation);
     }
   }
 

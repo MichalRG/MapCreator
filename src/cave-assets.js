@@ -1,73 +1,139 @@
 export const BUILTIN_ASSETS = [
   {
+    id: "wall_straight",
+    label: "Stone Wall",
+    description: "Straight stone wall run for rooms and corridors.",
+    accent: "#d0b08b",
+    defaultSize: 64,
+    category: "wall"
+  },
+  {
+    id: "wall_corner",
+    label: "Wall Corner",
+    description: "Right-angle wall turn for chamber corners.",
+    accent: "#ccb08b",
+    defaultSize: 64,
+    category: "wall"
+  },
+  {
+    id: "wall_t",
+    label: "Wall T-Junction",
+    description: "Three-way wall join for branching spaces.",
+    accent: "#d1b390",
+    defaultSize: 64,
+    category: "wall"
+  },
+  {
+    id: "wall_end",
+    label: "Wall End",
+    description: "Short wall ending cleanly at a doorway or break.",
+    accent: "#c7aa84",
+    defaultSize: 64,
+    category: "wall"
+  },
+  {
+    id: "wall_pillar",
+    label: "Wall Pillar",
+    description: "Chunky support block for corners and intersections.",
+    accent: "#c2a783",
+    defaultSize: 48,
+    category: "wall"
+  },
+  {
+    id: "door_wood",
+    label: "Wooden Door",
+    description: "Top-down timber door that cuts neatly into a wall run.",
+    accent: "#9b6a45",
+    defaultSize: 48,
+    category: "door"
+  },
+  {
+    id: "door_stone",
+    label: "Stone Door",
+    description: "Top-down carved stone door for sealed chambers and tombs.",
+    accent: "#a9a095",
+    defaultSize: 48,
+    category: "door"
+  },
+  {
     id: "stalagmites",
     label: "Stalagmites",
     description: "Sharp stone teeth for chamber edges.",
     accent: "#8b817a",
-    defaultSize: 92
+    defaultSize: 92,
+    category: "detail"
   },
   {
     id: "crystals",
     label: "Crystals",
     description: "Blue mineral clusters and shard gardens.",
     accent: "#79b4ff",
-    defaultSize: 84
+    defaultSize: 84,
+    category: "detail"
   },
   {
     id: "mushrooms",
     label: "Mushrooms",
     description: "Bioluminescent fungal patches.",
     accent: "#9bc879",
-    defaultSize: 80
+    defaultSize: 80,
+    category: "detail"
   },
   {
     id: "small_rocks",
     label: "Small Rocks",
     description: "Loose stone scatter and rubble patches.",
     accent: "#8f857d",
-    defaultSize: 76
+    defaultSize: 76,
+    category: "detail"
   },
   {
     id: "moss",
     label: "Green Moss",
     description: "Soft damp growth for cave walls and floors.",
     accent: "#6f9a52",
-    defaultSize: 86
+    defaultSize: 86,
+    category: "detail"
   },
   {
     id: "bones",
     label: "Bones",
     description: "Remains, warnings, and old battlefields.",
     accent: "#d8d0c4",
-    defaultSize: 72
+    defaultSize: 72,
+    category: "detail"
   },
   {
     id: "nest",
     label: "Nest",
     description: "Creature nest with eggs and debris.",
     accent: "#8e6745",
-    defaultSize: 90
+    defaultSize: 90,
+    category: "detail"
   },
   {
     id: "camp",
     label: "Camp",
     description: "Bedrolls and a guarded fire pit.",
     accent: "#f08f4e",
-    defaultSize: 82
+    defaultSize: 82,
+    category: "detail"
   },
   {
     id: "treasure",
     label: "Treasure",
     description: "Chest, coins, and a focal reward.",
     accent: "#f2c45e",
-    defaultSize: 74
+    defaultSize: 74,
+    category: "detail"
   },
   {
     id: "entrance",
     label: "Entrance",
     description: "A marked cave mouth or carved threshold.",
     accent: "#d8c68b",
-    defaultSize: 110
+    defaultSize: 110,
+    category: "detail"
   }
 ];
 
@@ -75,6 +141,23 @@ const BUILTIN_ASSET_MAP = new Map(BUILTIN_ASSETS.map((asset) => [asset.id, asset
 
 export function getBuiltinAsset(assetId) {
   return BUILTIN_ASSET_MAP.get(assetId) || BUILTIN_ASSETS[0];
+}
+
+export function listBuiltinAssetsByCategory(category) {
+  return BUILTIN_ASSETS.filter((asset) => (asset.category || "detail") === category);
+}
+
+export function isBuiltinWallAsset(assetId) {
+  return getBuiltinAsset(assetId).category === "wall";
+}
+
+export function isBuiltinDoorAsset(assetId) {
+  return getBuiltinAsset(assetId).category === "door";
+}
+
+export function isBuiltinStructuralAsset(assetId) {
+  const category = getBuiltinAsset(assetId).category;
+  return category === "wall" || category === "door";
 }
 
 function drawStoneSpike(ctx, x, y, width, height, fill, stroke) {
@@ -182,6 +265,104 @@ function drawMossPatch(ctx, x, y, width, height, fill, stroke, rotation = 0) {
   ctx.restore();
 }
 
+function drawWallStoneBlock(ctx, x, y, width, height, rotation = 0, profile = 0) {
+  void profile;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.52, height * 0.16);
+  ctx.lineTo(-width * 0.42, -height * 0.4);
+  ctx.lineTo(-width * 0.08, -height * 0.48);
+  ctx.lineTo(width * 0.36, -height * 0.28);
+  ctx.lineTo(width * 0.5, height * 0.06);
+  ctx.lineTo(width * 0.16, height * 0.46);
+  ctx.lineTo(-width * 0.26, height * 0.42);
+  ctx.closePath();
+  ctx.fillStyle = "#dbc5a5";
+  ctx.strokeStyle = "#685746";
+  ctx.lineWidth = Math.max(1.4, Math.min(width, height) * 0.08);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.28, -height * 0.14);
+  ctx.lineTo(width * 0.12, -height * 0.22);
+  ctx.strokeStyle = "rgba(255, 246, 224, 0.38)";
+  ctx.lineWidth = Math.max(1, Math.min(width, height) * 0.05);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawWallCourse(ctx, length, thickness, rotation = 0) {
+  const parts = [0.24, 0.18, 0.22, 0.16, 0.2];
+  const total = parts.reduce((sum, value) => sum + value, 0);
+  const scale = length / total;
+  let cursor = -length / 2;
+
+  ctx.save();
+  ctx.rotate(rotation);
+  parts.forEach((part, index) => {
+    const segment = part * scale;
+    const centerX = cursor + segment / 2;
+    const centerY = (index % 2 === 0 ? -1 : 1) * thickness * 0.06;
+    const blockHeight = thickness * (0.88 + (index % 3) * 0.05);
+    drawWallStoneBlock(ctx, centerX, centerY, segment * 0.96, blockHeight, (index % 2 === 0 ? -1 : 1) * 0.06);
+    cursor += segment;
+  });
+  ctx.restore();
+}
+
+function drawWallPillarStack(ctx, size) {
+  drawWallStoneBlock(ctx, 0, -size * 0.16, size * 0.56, size * 0.38, 0.08);
+  drawWallStoneBlock(ctx, 0, size * 0.14, size * 0.64, size * 0.42, -0.04);
+}
+
+function drawWallArm(ctx, length, thickness, rotation = 0) {
+  ctx.save();
+  ctx.rotate(rotation);
+  ctx.translate(length / 2, 0);
+  drawWallCourse(ctx, length, thickness);
+  ctx.restore();
+}
+
+function drawDoorLeaf(ctx, width, height, fill, stroke, plankStroke = null) {
+  ctx.beginPath();
+  ctx.roundRect(-width / 2, -height / 2, width, height, Math.max(4, width * 0.18));
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = Math.max(1.4, width * 0.08);
+  ctx.fill();
+  ctx.stroke();
+
+  if (plankStroke) {
+    ctx.strokeStyle = plankStroke;
+    ctx.lineWidth = Math.max(1, width * 0.05);
+    [-0.2, 0, 0.2].forEach((offset) => {
+      ctx.beginPath();
+      ctx.moveTo(width * offset, -height * 0.34);
+      ctx.lineTo(width * offset, height * 0.34);
+      ctx.stroke();
+    });
+  }
+}
+
+export function drawBuiltinDoorCutout(ctx, assetId, { size } = {}) {
+  if (!isBuiltinDoorAsset(assetId)) {
+    return false;
+  }
+
+  const resolvedSize = size || getBuiltinAsset(assetId).defaultSize;
+  const width = resolvedSize * 0.54;
+  const height = resolvedSize * 1.02;
+
+  ctx.beginPath();
+  ctx.roundRect(-width / 2, -height / 2, width, height, Math.max(5, width * 0.2));
+  ctx.fillStyle = "rgba(0, 0, 0, 1)";
+  ctx.fill();
+  return true;
+}
+
 export function drawBuiltinAsset(ctx, assetId, { size, rotation = 0, alpha = 1 } = {}) {
   const asset = getBuiltinAsset(assetId);
   const resolvedSize = size || asset.defaultSize;
@@ -191,6 +372,80 @@ export function drawBuiltinAsset(ctx, assetId, { size, rotation = 0, alpha = 1 }
   ctx.globalAlpha = alpha;
 
   switch (asset.id) {
+    case "wall_straight":
+      drawWallArm(ctx, resolvedSize / 2, resolvedSize * 0.3, 0);
+      drawWallArm(ctx, resolvedSize / 2, resolvedSize * 0.3, Math.PI);
+      break;
+
+    case "wall_corner":
+      drawWallArm(ctx, resolvedSize / 2, resolvedSize * 0.3, 0);
+      drawWallArm(ctx, resolvedSize / 2, resolvedSize * 0.3, -Math.PI / 2);
+      drawWallPillarStack(ctx, resolvedSize * 0.44);
+      break;
+
+    case "wall_t":
+      drawWallArm(ctx, resolvedSize / 2, resolvedSize * 0.28, 0);
+      drawWallArm(ctx, resolvedSize / 2, resolvedSize * 0.28, Math.PI);
+      drawWallArm(ctx, resolvedSize / 2, resolvedSize * 0.28, -Math.PI / 2);
+      drawWallPillarStack(ctx, resolvedSize * 0.42);
+      break;
+
+    case "wall_end":
+      drawWallArm(ctx, resolvedSize / 2, resolvedSize * 0.28, Math.PI);
+      ctx.save();
+      ctx.translate(-resolvedSize / 2, 0);
+      drawWallPillarStack(ctx, resolvedSize * 0.36);
+      ctx.restore();
+      break;
+
+    case "wall_pillar":
+      drawWallPillarStack(ctx, resolvedSize);
+      break;
+
+    case "door_wood":
+      ctx.fillStyle = "rgba(28, 22, 18, 0.48)";
+      ctx.beginPath();
+      ctx.roundRect(-resolvedSize * 0.3, -resolvedSize * 0.48, resolvedSize * 0.6, resolvedSize * 0.96, resolvedSize * 0.1);
+      ctx.fill();
+
+      drawDoorLeaf(ctx, resolvedSize * 0.46, resolvedSize * 0.88, "#8f613f", "#433126", "rgba(55, 35, 24, 0.5)");
+
+      ctx.strokeStyle = "#c9b59b";
+      ctx.lineWidth = Math.max(1.4, resolvedSize * 0.05);
+      [-0.22, 0.22].forEach((x) => {
+        ctx.beginPath();
+        ctx.moveTo(resolvedSize * x, -resolvedSize * 0.34);
+        ctx.lineTo(resolvedSize * x, resolvedSize * 0.34);
+        ctx.stroke();
+      });
+
+      ctx.fillStyle = "#d5c39b";
+      ctx.beginPath();
+      ctx.arc(resolvedSize * 0.14, 0, resolvedSize * 0.045, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case "door_stone":
+      ctx.fillStyle = "rgba(24, 22, 20, 0.48)";
+      ctx.beginPath();
+      ctx.roundRect(-resolvedSize * 0.3, -resolvedSize * 0.48, resolvedSize * 0.6, resolvedSize * 0.96, resolvedSize * 0.1);
+      ctx.fill();
+
+      drawDoorLeaf(ctx, resolvedSize * 0.48, resolvedSize * 0.9, "#a9a39a", "#5d5953");
+
+      ctx.strokeStyle = "rgba(233, 227, 215, 0.4)";
+      ctx.lineWidth = Math.max(1.2, resolvedSize * 0.045);
+      ctx.beginPath();
+      ctx.moveTo(-resolvedSize * 0.16, -resolvedSize * 0.26);
+      ctx.lineTo(resolvedSize * 0.16, -resolvedSize * 0.34);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-resolvedSize * 0.12, resolvedSize * 0.2);
+      ctx.lineTo(resolvedSize * 0.14, resolvedSize * 0.12);
+      ctx.stroke();
+      break;
+
     case "stalagmites":
       drawStoneSpike(ctx, -resolvedSize * 0.45, resolvedSize * 0.02, resolvedSize * 0.24, resolvedSize * 0.94, "#92877c", "#564d46");
       drawStoneSpike(ctx, -resolvedSize * 0.08, 0, resolvedSize * 0.3, resolvedSize * 1.16, "#a09489", "#5e534b");

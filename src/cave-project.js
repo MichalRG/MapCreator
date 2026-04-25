@@ -84,6 +84,7 @@ function normalizeStroke(stroke) {
     tool: normalizedTool,
     surfaceVariant,
     floorVariant: normalizedTool === "floor" ? surfaceVariant : "normal",
+    brushShape: stroke.brushShape === "square" ? "square" : "circle",
     size: Number(stroke.size),
     opacity: Number(stroke.opacity),
     mergeTouches: stroke.mergeTouches !== undefined ? Boolean(stroke.mergeTouches) : true,

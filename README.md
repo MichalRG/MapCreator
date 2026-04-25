@@ -31,11 +31,14 @@ Recommended development patterns for this repo:
 - Let `.editorconfig` enforce line endings, indentation, and trailing whitespace consistently across editors.
 - Add a regression test when fixing a bug or changing a save-file format.
 
-## What It Does
+## Features
 
-- Grid mode supports world hex maps and grid cave maps with terrain, built-in features, routes or connections, custom symbols, save/load, undo/redo, and PNG export
-- Freeform cave mode supports `Floor`, `Wall`, `Water`, `Lava`, and `Chasm` brushes across 5 layers, and placed details follow the selected layer too
-- Freeform cave mode includes built-in encounter details such as stalagmites, crystals, mushrooms, nests, camp sites, treasure, and entrances
+- Two editor modes: grid-based world or cave maps, plus a freeform cave draft workflow
+- Grid mode supports terrain painting, built-in features, route or connection drawing, custom symbols, save or load, undo or redo, and PNG export
+- Freeform cave mode supports `Floor`, `Wall`, `Water`, `Lava`, `Chasm`, and `Rubber` brushes across 5 paint layers
+- Freeform cave mode includes brush variants, `Circle` or `Square` brush shapes, merge-touching paint, and same-layer repaint after erase
+- Freeform cave mode includes built-in encounter details such as stalagmites, crystals, mushrooms, nests, camp sites, treasure, entrances, wall pieces, and doors
+- Freeform cave details follow the selected layer and can be selected, moved, rotated, duplicated, reordered, or deleted
 - Custom detail import from local `SVG` or `PNG`
 - Pan and zoom canvas navigation in both modes
 - Save and reopen editable projects for both modes

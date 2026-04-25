@@ -354,10 +354,24 @@ function getProceduralPattern(ctx, key) {
   return tile ? ctx.createPattern(tile, "repeat") : null;
 }
 
-function drawLayeredStroke(ctx, opacity, layers, pathBuilder) {
-  ctx.save();
+function getBrushShape(value) {
+  return value === "square" ? "square" : "circle";
+}
+
+function applyBrushShapeToContext(ctx, brushShape) {
+  if (getBrushShape(brushShape) === "square") {
+    ctx.lineCap = "square";
+    ctx.lineJoin = "bevel";
+    return;
+  }
+
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+}
+
+function drawLayeredStroke(ctx, opacity, layers, pathBuilder, brushShape = "circle") {
+  ctx.save();
+  applyBrushShapeToContext(ctx, brushShape);
 
   layers.forEach((layer) => {
     ctx.globalAlpha = clampAlpha(opacity * (layer.alpha ?? 1));
@@ -711,56 +725,30 @@ function drawFloorVariantMarkers(ctx, stroke) {
 }
 
 function drawFloorStroke(ctx, stroke) {
-  drawLayeredStroke(ctx, stroke.opacity, getFloorLayers(stroke), singleStrokePathBuilder(ctx, stroke));
+  drawLayeredStroke(ctx, stroke.opacity, getFloorLayers(stroke), singleStrokePathBuilder(ctx, stroke), stroke.brushShape);
 }
 
 function drawWallStroke(ctx, stroke) {
-  drawLayeredStroke(ctx, stroke.opacity, getWallLayers(stroke), singleStrokePathBuilder(ctx, stroke));
+  drawLayeredStroke(ctx, stroke.opacity, getWallLayers(stroke), singleStrokePathBuilder(ctx, stroke), stroke.brushShape);
 }
 
 function drawWaterStroke(ctx, stroke) {
-  drawLayeredStroke(ctx, stroke.opacity, getWaterLayers(stroke), singleStrokePathBuilder(ctx, stroke));
+  drawLayeredStroke(ctx, stroke.opacity, getWaterLayers(stroke), singleStrokePathBuilder(ctx, stroke), stroke.brushShape);
 }
 
 function drawLavaStroke(ctx, stroke) {
-  drawLayeredStroke(ctx, stroke.opacity, getLavaLayers(stroke), singleStrokePathBuilder(ctx, stroke));
+  drawLayeredStroke(ctx, stroke.opacity, getLavaLayers(stroke), singleStrokePathBuilder(ctx, stroke), stroke.brushShape);
 }
 
 function drawChasmStroke(ctx, stroke) {
-  drawLayeredStroke(ctx, stroke.opacity, getChasmLayers(stroke), singleStrokePathBuilder(ctx, stroke));
+  drawLayeredStroke(ctx, stroke.opacity, getChasmLayers(stroke), singleStrokePathBuilder(ctx, stroke), stroke.brushShape);
 }
 
 function drawEraseStroke(ctx, stroke) {
-  // Darken the existing painted surface at the cut line so erased areas read like carved edges.
-  ctx.save();
-  ctx.globalCompositeOperation = "source-atop";
-  ctx.globalAlpha = 0.72;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = "#2f2722";
-  ctx.lineWidth = stroke.size * 1.18;
-  if (buildStrokePath(ctx, stroke.points, stroke.size)) {
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  ctx.save();
-  ctx.globalCompositeOperation = "source-atop";
-  ctx.globalAlpha = 0.28;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = "#8a7763";
-  ctx.lineWidth = stroke.size * 0.46;
-  if (buildStrokePath(ctx, stroke.points, stroke.size)) {
-    ctx.stroke();
-  }
-  ctx.restore();
-
   ctx.save();
   ctx.globalCompositeOperation = "destination-out";
   ctx.globalAlpha = 1;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
+  applyBrushShapeToContext(ctx, stroke.brushShape);
   ctx.strokeStyle = "rgba(0, 0, 0, 1)";
   ctx.lineWidth = stroke.size * 1.02;
   if (buildStrokePath(ctx, stroke.points, stroke.size)) {
@@ -799,7 +787,7 @@ function groupPaintStrokes(strokes) {
   const groups = new Map();
 
   strokes.forEach((stroke) => {
-    const key = `${strokeRenderFamily(stroke)}|${stroke.size}|${stroke.opacity}`;
+    const key = `${strokeRenderFamily(stroke)}|${getBrushShape(stroke.brushShape)}|${stroke.size}|${stroke.opacity}`;
     if (!groups.has(key)) {
       groups.set(key, []);
     }
@@ -822,7 +810,7 @@ function buildGroupedPath(ctx, strokes, sizeMultiplier = 1) {
 
 function drawGroupedFloor(ctx, strokes) {
   const sample = strokes[0];
-  drawLayeredStroke(ctx, sample.opacity, getFloorLayers(sample), groupedStrokePathBuilder(ctx, strokes));
+  drawLayeredStroke(ctx, sample.opacity, getFloorLayers(sample), groupedStrokePathBuilder(ctx, strokes), sample.brushShape);
 
   strokes.forEach((stroke) => {
     drawFloorVariantMarkers(ctx, stroke);
@@ -831,22 +819,22 @@ function drawGroupedFloor(ctx, strokes) {
 
 function drawGroupedWall(ctx, strokes) {
   const sample = strokes[0];
-  drawLayeredStroke(ctx, sample.opacity, getWallLayers(sample), groupedStrokePathBuilder(ctx, strokes));
+  drawLayeredStroke(ctx, sample.opacity, getWallLayers(sample), groupedStrokePathBuilder(ctx, strokes), sample.brushShape);
 }
 
 function drawGroupedWater(ctx, strokes) {
   const sample = strokes[0];
-  drawLayeredStroke(ctx, sample.opacity, getWaterLayers(sample), groupedStrokePathBuilder(ctx, strokes));
+  drawLayeredStroke(ctx, sample.opacity, getWaterLayers(sample), groupedStrokePathBuilder(ctx, strokes), sample.brushShape);
 }
 
 function drawGroupedLava(ctx, strokes) {
   const sample = strokes[0];
-  drawLayeredStroke(ctx, sample.opacity, getLavaLayers(sample), groupedStrokePathBuilder(ctx, strokes));
+  drawLayeredStroke(ctx, sample.opacity, getLavaLayers(sample), groupedStrokePathBuilder(ctx, strokes), sample.brushShape);
 }
 
 function drawGroupedChasm(ctx, strokes) {
   const sample = strokes[0];
-  drawLayeredStroke(ctx, sample.opacity, getChasmLayers(sample), groupedStrokePathBuilder(ctx, strokes));
+  drawLayeredStroke(ctx, sample.opacity, getChasmLayers(sample), groupedStrokePathBuilder(ctx, strokes), sample.brushShape);
 }
 
 function drawMergedPaint(ctx, strokes) {
@@ -879,20 +867,39 @@ function drawMergedPaint(ctx, strokes) {
 }
 
 function strokeGroupKey(stroke) {
-  return `${strokeRenderFamily(stroke)}|${stroke.size}|${stroke.opacity}`;
+  return `${strokeRenderFamily(stroke)}|${getBrushShape(stroke.brushShape)}|${stroke.size}|${stroke.opacity}`;
 }
 
-export function orderPaintStrokesForRendering(strokes) {
+function createOffscreenSurface(width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  return ctx ? { canvas, ctx } : null;
+}
+
+function getMaskLineWidth(stroke) {
+  return stroke.size * 1.6;
+}
+
+function drawMaskStroke(ctx, stroke, compositeOperation) {
+  ctx.save();
+  ctx.globalCompositeOperation = compositeOperation;
+  ctx.globalAlpha = 1;
+  applyBrushShapeToContext(ctx, stroke.brushShape);
+  ctx.strokeStyle = "rgba(255, 255, 255, 1)";
+  ctx.lineWidth = getMaskLineWidth(stroke);
+  if (buildStrokePath(ctx, stroke.points, stroke.size)) {
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function orderPaintSegment(strokes) {
   const background = [];
   const surfaces = [];
-  const erase = [];
 
   strokes.forEach((stroke) => {
-    if (stroke.tool === "erase") {
-      erase.push(stroke);
-      return;
-    }
-
     if (stroke.tool === "wall") {
       background.push(stroke);
       return;
@@ -901,45 +908,125 @@ export function orderPaintStrokesForRendering(strokes) {
     surfaces.push(stroke);
   });
 
-  return [...background, ...surfaces, ...erase];
+  return [...background, ...surfaces];
+}
+
+export function orderPaintStrokesForRendering(strokes) {
+  const ordered = [];
+  let segment = [];
+
+  function flushSegment() {
+    if (!segment.length) {
+      return;
+    }
+
+    ordered.push(...orderPaintSegment(segment));
+    segment = [];
+  }
+
+  strokes.forEach((stroke) => {
+    if (stroke.tool === "erase") {
+      flushSegment();
+      ordered.push(stroke);
+      return;
+    }
+
+    segment.push(stroke);
+  });
+
+  flushSegment();
+  return ordered;
+}
+
+function paintGroupPriority(group) {
+  return group.sample.tool === "wall" ? 0 : 1;
+}
+
+function sortPaintGroups(left, right) {
+  const leftPriority = paintGroupPriority(left);
+  const rightPriority = paintGroupPriority(right);
+  if (leftPriority !== rightPriority) {
+    return leftPriority - rightPriority;
+  }
+  return left.order - right.order;
+}
+
+export function buildPaintMaskPlan(strokes) {
+  const ordered = orderPaintStrokesForRendering(strokes);
+  const groups = new Map();
+
+  ordered.forEach((stroke, index) => {
+    if (stroke.tool === "erase") {
+      groups.forEach((group) => {
+        group.maskSteps.push({
+          type: "erase",
+          stroke
+        });
+      });
+      return;
+    }
+
+    const key = stroke.mergeTouches ? strokeGroupKey(stroke) : `single|${stroke.id}`;
+    let group = groups.get(key);
+
+    if (!group) {
+      group = {
+        key,
+        order: index,
+        sample: stroke,
+        strokes: [],
+        maskSteps: []
+      };
+      groups.set(key, group);
+    }
+
+    group.strokes.push(stroke);
+    group.maskSteps.push({
+      type: "paint",
+      stroke
+    });
+  });
+
+  return Array.from(groups.values()).sort(sortPaintGroups);
 }
 
 function renderPaintSequence(ctx, strokes) {
-  let mergeBatch = [];
-  let activeGroupKey = null;
+  const groups = buildPaintMaskPlan(strokes);
 
-  function flushMergeBatch() {
-    if (!mergeBatch.length) {
-      return;
-    }
-    drawMergedPaint(ctx, mergeBatch);
-    mergeBatch = [];
-    activeGroupKey = null;
+  if (!groups.length) {
+    return;
   }
 
-  orderPaintStrokesForRendering(strokes).forEach((stroke) => {
-    if (stroke.tool === "erase") {
-      flushMergeBatch();
-      drawEraseStroke(ctx, stroke);
+  const paintSurface = createOffscreenSurface(ctx.canvas.width, ctx.canvas.height);
+  if (!paintSurface) {
+    return;
+  }
+
+  groups.forEach((group) => {
+    const mask = createOffscreenSurface(ctx.canvas.width, ctx.canvas.height);
+    if (!mask) {
       return;
     }
 
-    if (!stroke.mergeTouches) {
-      flushMergeBatch();
-      drawStroke(ctx, stroke);
-      return;
+    group.maskSteps.forEach((step) => {
+      drawMaskStroke(mask.ctx, step.stroke, step.type === "erase" ? "destination-out" : "source-over");
+    });
+
+    paintSurface.ctx.clearRect(0, 0, paintSurface.canvas.width, paintSurface.canvas.height);
+
+    if (group.strokes.length === 1 && !group.sample.mergeTouches) {
+      drawStroke(paintSurface.ctx, group.strokes[0]);
+    } else {
+      drawMergedPaint(paintSurface.ctx, group.strokes);
     }
 
-    const nextGroupKey = strokeGroupKey(stroke);
-    if (mergeBatch.length && nextGroupKey !== activeGroupKey) {
-      flushMergeBatch();
-    }
+    paintSurface.ctx.save();
+    paintSurface.ctx.globalCompositeOperation = "destination-in";
+    paintSurface.ctx.drawImage(mask.canvas, 0, 0);
+    paintSurface.ctx.restore();
 
-    mergeBatch.push(stroke);
-    activeGroupKey = nextGroupKey;
+    ctx.drawImage(paintSurface.canvas, 0, 0);
   });
-
-  flushMergeBatch();
 }
 
 function resolveLayerSurface(project, layerSurface = null) {
@@ -1112,7 +1199,7 @@ function drawLayerStack(ctx, project, imageCache, selectedStampId, layerSurface 
   });
 }
 
-function drawPaintPreview(ctx, hoverPoint, brushSize, tool, surfaceVariant = "normal") {
+function drawPaintPreview(ctx, hoverPoint, brushSize, tool, surfaceVariant = "normal", brushShape = "circle") {
   if (!hoverPoint) {
     return;
   }
@@ -1130,9 +1217,13 @@ function drawPaintPreview(ctx, hoverPoint, brushSize, tool, surfaceVariant = "no
   ctx.strokeStyle = palette[tool] || "rgba(255, 255, 255, 0.5)";
   ctx.lineWidth = 2;
   ctx.setLineDash([10, 8]);
-  ctx.beginPath();
-  ctx.arc(hoverPoint.x, hoverPoint.y, brushSize / 2, 0, Math.PI * 2);
-  ctx.stroke();
+  if (getBrushShape(brushShape) === "square") {
+    ctx.strokeRect(hoverPoint.x - brushSize / 2, hoverPoint.y - brushSize / 2, brushSize, brushSize);
+  } else {
+    ctx.beginPath();
+    ctx.arc(hoverPoint.x, hoverPoint.y, brushSize / 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 
   if (surfaceVariant !== "normal" && surfaceVariant !== "up" && surfaceVariant !== "down") {
     ctx.setLineDash([]);
@@ -1232,7 +1323,7 @@ function drawLinePreview(ctx, preview) {
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.lineWidth = Math.max(2, preview.size * 0.16);
-  ctx.lineCap = "round";
+  applyBrushShapeToContext(ctx, preview.brushShape);
   ctx.setLineDash([14, 10]);
   ctx.beginPath();
   ctx.moveTo(preview.start.x, preview.start.y);
@@ -1241,13 +1332,23 @@ function drawLinePreview(ctx, preview) {
 
   ctx.setLineDash([]);
   ctx.globalAlpha = 0.85;
-  ctx.beginPath();
-  ctx.arc(preview.start.x, preview.start.y, Math.max(4, preview.size * 0.08), 0, Math.PI * 2);
-  ctx.fill();
+  if (getBrushShape(preview.brushShape) === "square") {
+    const startSize = Math.max(8, preview.size * 0.16);
+    ctx.fillRect(preview.start.x - startSize / 2, preview.start.y - startSize / 2, startSize, startSize);
+  } else {
+    ctx.beginPath();
+    ctx.arc(preview.start.x, preview.start.y, Math.max(4, preview.size * 0.08), 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.globalAlpha = 1;
-  ctx.beginPath();
-  ctx.arc(preview.end.x, preview.end.y, Math.max(5, preview.size * 0.1), 0, Math.PI * 2);
-  ctx.stroke();
+  if (getBrushShape(preview.brushShape) === "square") {
+    const endSize = Math.max(10, preview.size * 0.2);
+    ctx.strokeRect(preview.end.x - endSize / 2, preview.end.y - endSize / 2, endSize, endSize);
+  } else {
+    ctx.beginPath();
+    ctx.arc(preview.end.x, preview.end.y, Math.max(5, preview.size * 0.1), 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -1256,8 +1357,20 @@ function pointInPage(project, point) {
 }
 
 function drawProject(ctx, options) {
-  const { project, imageCache, selectedStampId, hoverPoint, selectedTool, surfaceVariant = "normal", brushSize, detailPreview, detailRotation = 0, linePreview, layerSurface } =
-    options;
+  const {
+    project,
+    imageCache,
+    selectedStampId,
+    hoverPoint,
+    selectedTool,
+    surfaceVariant = "normal",
+    brushSize,
+    brushShape = "circle",
+    detailPreview,
+    detailRotation = 0,
+    linePreview,
+    layerSurface
+  } = options;
 
   drawPage(ctx, project);
 
@@ -1269,7 +1382,7 @@ function drawProject(ctx, options) {
 
   if (pointInPage(project, hoverPoint)) {
     if (["floor", "wall", "water", "lava", "chasm", "erase"].includes(selectedTool)) {
-      drawPaintPreview(ctx, hoverPoint, brushSize, selectedTool, surfaceVariant);
+      drawPaintPreview(ctx, hoverPoint, brushSize, selectedTool, surfaceVariant, brushShape);
       if (selectedTool === "floor" && (surfaceVariant === "up" || surfaceVariant === "down")) {
         drawFloorVariantMarkers(
           ctx,

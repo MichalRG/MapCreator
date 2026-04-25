@@ -156,6 +156,14 @@ function template() {
             </label>
 
             <label class="field">
+              <span>Brush shape</span>
+              <select data-role="brush-shape-select">
+                <option value="circle">Circle</option>
+                <option value="square">Square</option>
+              </select>
+            </label>
+
+            <label class="field">
               <span data-role="surface-variant-label">Floor variant</span>
               <select data-role="floor-variant-select">
               </select>
@@ -328,6 +336,7 @@ export function mountFreeformEditor(container) {
     selectedAssetId: DEFAULT_BUILTIN_ASSET.id,
     brushSize: 96,
     brushOpacity: 1,
+    brushShape: "circle",
     detailRotation: 0,
     environmentVariants: {
       door: "wood"
@@ -386,6 +395,7 @@ export function mountFreeformEditor(container) {
     paintLayerSelect: byRole(container, "paint-layer-select"),
     brushSizeInput: byRole(container, "brush-size-input"),
     brushOpacityInput: byRole(container, "brush-opacity-input"),
+    brushShapeSelect: byRole(container, "brush-shape-select"),
     surfaceVariantLabel: byRole(container, "surface-variant-label"),
     floorVariantSelect: byRole(container, "floor-variant-select"),
     connectPaintInput: byRole(container, "connect-paint-input"),
@@ -777,6 +787,7 @@ export function mountFreeformEditor(container) {
   function updateBrushControls() {
     ensureActivePaintLayer();
     elements.paintLayerSelect.value = state.activePaintLayerId || "";
+    elements.brushShapeSelect.value = state.brushShape;
     syncSurfaceVariantOptions();
     syncEnvironmentVariantControls();
   }
@@ -796,6 +807,7 @@ export function mountFreeformEditor(container) {
   function rebuildUsageList() {
     const tips = [
       "Use each brush variant to shift the material feel: Floor includes Raised, Lowered, Cracked Stone, and Parent Rock options, while Parent Rock, Water, Lava, and Chasm each include a more textured realistic option.",
+      "Brush Shape switches between the current circular footprint and a square footprint for blockier drafting.",
       "Switch paint layers when one surface needs to sit cleanly above another. Layer 5 always renders above Layer 1.",
       "Hold Shift and click with a paint brush to draw a straight segment from the previous brush endpoint. Add Ctrl to lock it to 45-degree angles.",
       "With a wall piece or door selected, use Ctrl + mouse wheel to rotate it before placing.",
@@ -1152,6 +1164,7 @@ export function mountFreeformEditor(container) {
       selectedTool: activeSurfaceBrush?.tool || state.selectedTool,
       surfaceVariant: activeSurfaceBrush?.surfaceVariant || currentSurfaceVariant(),
       brushSize: state.brushSize,
+      brushShape: state.brushShape,
       layerSurface,
       detailPreview: currentAssetSelection(),
       detailRotation: state.detailRotation,
@@ -1165,7 +1178,8 @@ export function mountFreeformEditor(container) {
               start: state.paintLineAnchor,
               end: resolvePaintLineEnd(state.paintLineAnchor, state.hoverPoint, angleConstraintPressed),
               tool: activeSurfaceBrush?.tool || state.selectedTool,
-              size: state.brushSize
+              size: state.brushSize,
+              brushShape: state.brushShape
             }
           : null
     });
@@ -1324,6 +1338,7 @@ export function mountFreeformEditor(container) {
       tool: activeSurfaceBrush.tool,
       surfaceVariant: activeSurfaceBrush.surfaceVariant,
       floorVariant: activeSurfaceBrush.tool === "floor" ? activeSurfaceBrush.surfaceVariant : "normal",
+      brushShape: state.brushShape,
       size: state.brushSize,
       opacity: state.brushOpacity,
       mergeTouches: state.selectedTool === "erase" ? false : state.connectPaint,
@@ -1356,6 +1371,7 @@ export function mountFreeformEditor(container) {
       tool: activeSurfaceBrush.tool,
       surfaceVariant: activeSurfaceBrush.surfaceVariant,
       floorVariant: activeSurfaceBrush.tool === "floor" ? activeSurfaceBrush.surfaceVariant : "normal",
+      brushShape: state.brushShape,
       size: state.brushSize,
       opacity: state.brushOpacity,
       mergeTouches: state.selectedTool === "erase" ? false : state.connectPaint,
@@ -1773,6 +1789,12 @@ export function mountFreeformEditor(container) {
 
     elements.brushOpacityInput.addEventListener("input", () => {
       state.brushOpacity = Number(elements.brushOpacityInput.value) / 100;
+      render();
+    });
+
+    elements.brushShapeSelect.addEventListener("change", () => {
+      state.brushShape = elements.brushShapeSelect.value === "square" ? "square" : "circle";
+      setStatus(`Brush shape set to ${state.brushShape}.`);
       render();
     });
 

@@ -80,6 +80,7 @@ test("normalizeProject migrates version 3 cave drafts into paint layers", () => 
       tool: "floor",
       surfaceVariant: "up",
       floorVariant: "up",
+      brushShape: "circle",
       size: 24,
       opacity: 0.5,
       mergeTouches: true,
@@ -174,6 +175,53 @@ test("normalizeProject preserves supported surface variants and normalizes unkno
   assert.equal(normalized.paintLayers[0].strokes[3].surfaceVariant, "pool");
   assert.equal(normalized.paintLayers[0].strokes[4].surfaceVariant, "molten");
   assert.equal(normalized.paintLayers[0].strokes[5].surfaceVariant, "rift");
+});
+
+test("normalizeProject preserves square brush strokes and defaults invalid brush shapes to circle", () => {
+  const normalized = normalizeProject({
+    version: 5,
+    kind: "cave-draft",
+    metadata: {
+      name: "Brush Shape Test",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-02T00:00:00.000Z",
+      width: 1600,
+      height: 1000,
+      gridSize: 64,
+      showGrid: true,
+      snapToGrid: false
+    },
+    paintLayers: [
+      {
+        id: "layer-1",
+        name: "Layer 1",
+        visible: true,
+        strokes: [
+          {
+            id: "square-stroke",
+            tool: "wall",
+            brushShape: "square",
+            size: 42,
+            opacity: 0.85,
+            points: [{ x: 40, y: 60 }]
+          },
+          {
+            id: "invalid-shape",
+            tool: "water",
+            brushShape: "triangle",
+            size: 30,
+            opacity: 0.7,
+            points: [{ x: 100, y: 120 }]
+          }
+        ]
+      }
+    ],
+    stamps: [],
+    customAssets: []
+  });
+
+  assert.equal(normalized.paintLayers[0].strokes[0].brushShape, "square");
+  assert.equal(normalized.paintLayers[0].strokes[1].brushShape, "circle");
 });
 
 test("normalizeProject rejects older grid cave files", () => {

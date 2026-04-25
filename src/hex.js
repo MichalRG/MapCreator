@@ -130,9 +130,9 @@ export function getCellPoints(project, col, row, size) {
 }
 
 function cubeRound(q, r) {
-  let x = q;
-  let z = r;
-  let y = -x - z;
+  const x = q;
+  const z = r;
+  const y = -x - z;
 
   let rx = Math.round(x);
   let ry = Math.round(y);

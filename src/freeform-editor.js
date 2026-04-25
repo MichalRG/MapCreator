@@ -43,7 +43,6 @@ const TOOL_DEFS = [
   { id: "pan", label: "Pan", description: "Drag the workspace without editing." }
 ];
 
-const PAINT_TOOLS = new Set(["floor", "wall", "water", "lava", "chasm"]);
 const SURFACE_BRUSH_TOOLS = new Set(["floor", "wall", "water", "lava", "chasm", "erase"]);
 
 function template() {

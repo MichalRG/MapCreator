@@ -1,0 +1,137 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  createProject,
+  getAllPaintStrokes,
+  getPaintLayer,
+  getSuggestedPngName,
+  getSuggestedProjectName,
+  normalizeProject,
+  validateProjectShape
+} from "../src/cave-project.js";
+
+test("createProject builds a freeform cave draft with default layers", () => {
+  const project = createProject({ width: 1800, height: 1200, name: "Lower Warrens" });
+
+  assert.equal(project.version, 5);
+  assert.equal(project.kind, "cave-draft");
+  assert.equal(project.metadata.gridSize, 64);
+  assert.equal(project.paintLayers.length, 5);
+  assert.deepEqual(project.paintLayers.map((layer) => layer.id), [
+    "layer-1",
+    "layer-2",
+    "layer-3",
+    "layer-4",
+    "layer-5"
+  ]);
+  assert.equal(project.metadata.createdAt, project.metadata.updatedAt);
+});
+
+test("normalizeProject migrates version 3 cave drafts into paint layers", () => {
+  const normalized = normalizeProject({
+    version: 3,
+    kind: "cave-draft",
+    metadata: {
+      name: "Legacy Draft",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-02T00:00:00.000Z",
+      width: 1600,
+      height: 1000,
+      gridSize: 48,
+      showGrid: true,
+      snapToGrid: false
+    },
+    strokes: [
+      {
+        id: 12,
+        tool: "floor-up",
+        size: "24",
+        opacity: "0.5",
+        points: [{ x: "10", y: "15" }]
+      }
+    ],
+    stamps: [
+      {
+        id: 7,
+        assetKind: "custom",
+        assetId: "asset-1",
+        x: "120",
+        y: "75",
+        size: "90",
+        rotation: "0.5"
+      }
+    ],
+    customAssets: [
+      {
+        id: 3,
+        name: "Crystal Cluster",
+        assetData: "data:image/png;base64,abc",
+        assetType: "png"
+      }
+    ]
+  });
+
+  assert.equal(normalized.version, 5);
+  assert.equal(normalized.paintLayers.length, 5);
+  assert.deepEqual(normalized.paintLayers[0].strokes, [
+    {
+      id: "12",
+      tool: "floor",
+      floorVariant: "up",
+      size: 24,
+      opacity: 0.5,
+      mergeTouches: true,
+      points: [{ x: 10, y: 15 }]
+    }
+  ]);
+  assert.equal(normalized.stamps[0].layerId, "layer-1");
+  assert.equal(normalized.customAssets[0].id, "3");
+});
+
+test("normalizeProject rejects older grid cave files", () => {
+  assert.throws(
+    () =>
+      normalizeProject({
+        version: 2,
+        metadata: { mapType: "cave" }
+      }),
+    /Grid cave projects from the older editor are not supported/
+  );
+});
+
+test("getPaintLayer and getAllPaintStrokes expose layer-based content", () => {
+  const project = createProject({ width: 1800, height: 1200, name: "Layer Test" });
+  project.paintLayers[1].strokes.push({ id: "a" }, { id: "b" });
+  project.paintLayers[3].strokes.push({ id: "c" });
+
+  assert.equal(getPaintLayer(project, "layer-2"), project.paintLayers[1]);
+  assert.equal(getPaintLayer(project, "missing"), project.paintLayers[0]);
+  assert.deepEqual(getAllPaintStrokes(project), [{ id: "a" }, { id: "b" }, { id: "c" }]);
+});
+
+test("validateProjectShape rejects too-small canvases and invalid stamp layer references", () => {
+  const smallProject = createProject({ width: 640, height: 480, name: "Tiny" });
+  assert.throws(() => validateProjectShape(smallProject), /Project dimensions are too small/);
+
+  const project = createProject({ width: 1800, height: 1200, name: "Stamp Layers" });
+  project.stamps.push({
+    id: "stamp-1",
+    assetKind: "builtin",
+    assetId: "treasure",
+    layerId: "missing-layer",
+    x: 0,
+    y: 0,
+    size: 80,
+    rotation: 0
+  });
+
+  assert.throws(() => validateProjectShape(project), /Project detail layers are invalid/);
+});
+
+test("freeform cave draft file names are slugged correctly", () => {
+  const project = createProject({ width: 1800, height: 1200, name: " Vault of Echoes " });
+
+  assert.equal(getSuggestedProjectName(project), "vault-of-echoes.caveforge.json");
+  assert.equal(getSuggestedPngName(project), "vault-of-echoes.caveforge.png");
+});

@@ -5,6 +5,14 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "serve": "node server.mjs"
+    "serve": "node server.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "check": "npm run lint && npm test",
+    "test": "node --test --test-isolation=none",
+    "test:coverage": "node --test --test-isolation=none --experimental-test-coverage"
+  },
+  "devDependencies": {
+    "eslint": "^10.2.1"
   }
 }

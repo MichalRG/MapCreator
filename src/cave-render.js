@@ -533,20 +533,11 @@ function renderPaintSequence(ctx, strokes) {
   flushMergeBatch();
 }
 
-function drawPaintLayers(ctx, project) {
-  const paintCanvas = document.createElement("canvas");
-  paintCanvas.width = Math.max(1, Math.ceil(project.metadata.width));
-  paintCanvas.height = Math.max(1, Math.ceil(project.metadata.height));
-  const paintCtx = paintCanvas.getContext("2d");
-
-  getPaintLayers(project).forEach((layer) => {
-    if (!layer.visible || !Array.isArray(layer.strokes) || !layer.strokes.length) {
-      return;
-    }
-    renderPaintSequence(paintCtx, layer.strokes);
-  });
-
-  ctx.drawImage(paintCanvas, 0, 0);
+function createLayerCanvas(project) {
+  const layerCanvas = document.createElement("canvas");
+  layerCanvas.width = Math.max(1, Math.ceil(project.metadata.width));
+  layerCanvas.height = Math.max(1, Math.ceil(project.metadata.height));
+  return layerCanvas;
 }
 
 function drawGrid(ctx, width, height, gridSize) {
@@ -653,13 +644,37 @@ function drawStamp(ctx, stamp, imageCache, selectedStampId) {
   ctx.restore();
 }
 
-function drawStampsByLayer(ctx, project, imageCache, selectedStampId) {
-  const layerIds = getPaintLayers(project).map((layer) => layer.id);
+function groupStampsByLayer(project) {
+  const stampsByLayer = new Map();
 
-  layerIds.forEach((layerId) => {
-    project.stamps
-      .filter((stamp) => stamp.layerId === layerId)
-      .forEach((stamp) => drawStamp(ctx, stamp, imageCache, selectedStampId));
+  project.stamps.forEach((stamp) => {
+    if (!stampsByLayer.has(stamp.layerId)) {
+      stampsByLayer.set(stamp.layerId, []);
+    }
+    stampsByLayer.get(stamp.layerId).push(stamp);
+  });
+
+  return stampsByLayer;
+}
+
+function drawStamps(ctx, stamps, imageCache, selectedStampId) {
+  stamps.forEach((stamp) => drawStamp(ctx, stamp, imageCache, selectedStampId));
+}
+
+function drawLayerStack(ctx, project, imageCache, selectedStampId) {
+  const layerCanvas = createLayerCanvas(project);
+  const layerCtx = layerCanvas.getContext("2d");
+  const stampsByLayer = groupStampsByLayer(project);
+
+  getPaintLayers(project).forEach((layer) => {
+    if (layer.visible && Array.isArray(layer.strokes) && layer.strokes.length) {
+      // Reset the offscreen surface per paint layer so erase strokes only cut into that layer.
+      layerCtx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
+      renderPaintSequence(layerCtx, layer.strokes);
+      ctx.drawImage(layerCanvas, 0, 0);
+    }
+
+    drawStamps(ctx, stampsByLayer.get(layer.id) || [], imageCache, selectedStampId);
   });
 }
 
@@ -763,8 +778,7 @@ function drawProject(ctx, options) {
     drawGrid(ctx, project.metadata.width, project.metadata.height, project.metadata.gridSize);
   }
 
-  drawPaintLayers(ctx, project);
-  drawStampsByLayer(ctx, project, imageCache, selectedStampId);
+  drawLayerStack(ctx, project, imageCache, selectedStampId);
 
   if (pointInPage(project, hoverPoint)) {
     if (["floor", "wall", "water", "lava", "chasm", "erase"].includes(selectedTool)) {

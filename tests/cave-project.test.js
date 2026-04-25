@@ -78,6 +78,7 @@ test("normalizeProject migrates version 3 cave drafts into paint layers", () => 
     {
       id: "12",
       tool: "floor",
+      surfaceVariant: "up",
       floorVariant: "up",
       size: 24,
       opacity: 0.5,
@@ -87,6 +88,92 @@ test("normalizeProject migrates version 3 cave drafts into paint layers", () => 
   ]);
   assert.equal(normalized.stamps[0].layerId, "layer-1");
   assert.equal(normalized.customAssets[0].id, "3");
+});
+
+test("normalizeProject preserves supported surface variants and normalizes unknown ones", () => {
+  const normalized = normalizeProject({
+    version: 5,
+    kind: "cave-draft",
+    metadata: {
+      name: "Variant Test",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-02T00:00:00.000Z",
+      width: 1600,
+      height: 1000,
+      gridSize: 64,
+      showGrid: true,
+      snapToGrid: false
+    },
+    paintLayers: [
+      {
+        id: "layer-1",
+        name: "Layer 1",
+        visible: true,
+        strokes: [
+          {
+            id: "cracked-stroke",
+            tool: "floor",
+            surfaceVariant: "cracked",
+            floorVariant: "cracked",
+            size: 36,
+            opacity: 0.9,
+            points: [{ x: 30, y: 45 }]
+          },
+          {
+            id: "unknown-variant",
+            tool: "floor",
+            floorVariant: "unknown",
+            size: 24,
+            opacity: 0.6,
+            points: [{ x: 90, y: 110 }]
+          },
+          {
+            id: "wall-jagged",
+            tool: "wall",
+            surfaceVariant: "jagged",
+            size: 40,
+            opacity: 0.75,
+            points: [{ x: 120, y: 140 }]
+          },
+          {
+            id: "water-pool",
+            tool: "water",
+            surfaceVariant: "pool",
+            size: 30,
+            opacity: 0.8,
+            points: [{ x: 160, y: 190 }]
+          },
+          {
+            id: "lava-molten",
+            tool: "lava",
+            surfaceVariant: "molten",
+            size: 34,
+            opacity: 0.88,
+            points: [{ x: 210, y: 250 }]
+          },
+          {
+            id: "chasm-rift",
+            tool: "chasm",
+            surfaceVariant: "rift",
+            size: 50,
+            opacity: 0.92,
+            points: [{ x: 260, y: 320 }]
+          }
+        ]
+      }
+    ],
+    stamps: [],
+    customAssets: []
+  });
+
+  assert.equal(normalized.paintLayers[0].strokes[0].surfaceVariant, "cracked");
+  assert.equal(normalized.paintLayers[0].strokes[0].floorVariant, "cracked");
+  assert.equal(normalized.paintLayers[0].strokes[1].surfaceVariant, "normal");
+  assert.equal(normalized.paintLayers[0].strokes[2].surfaceVariant, "jagged");
+  assert.equal(normalized.paintLayers[0].strokes[2].floorVariant, "normal");
+  assert.equal(normalized.paintLayers[0].strokes[3].surfaceVariant, "pool");
+  assert.equal(normalized.paintLayers[0].strokes[4].surfaceVariant, "molten");
+  assert.equal(normalized.paintLayers[0].strokes[5].surfaceVariant, "rift");
 });
 
 test("normalizeProject rejects older grid cave files", () => {

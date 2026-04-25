@@ -1,5 +1,12 @@
 import { BUILTIN_ASSETS, getBuiltinAsset } from "./cave-assets.js";
 import {
+  getDefaultSurfaceVariant,
+  getSurfaceVariantLabel,
+  getSurfaceVariantOptions,
+  normalizeSurfaceVariant,
+  surfaceToolSupportsVariants
+} from "./cave-surface-variants.js";
+import {
   cloneProject,
   createProject,
   getAllPaintStrokes,
@@ -44,6 +51,16 @@ const TOOL_DEFS = [
 ];
 
 const SURFACE_BRUSH_TOOLS = new Set(["floor", "wall", "water", "lava", "chasm", "erase"]);
+
+function createInitialSurfaceVariants() {
+  return {
+    floor: getDefaultSurfaceVariant("floor"),
+    wall: getDefaultSurfaceVariant("wall"),
+    water: getDefaultSurfaceVariant("water"),
+    lava: getDefaultSurfaceVariant("lava"),
+    chasm: getDefaultSurfaceVariant("chasm")
+  };
+}
 
 function template() {
   return `
@@ -124,11 +141,8 @@ function template() {
             </label>
 
             <label class="field">
-              <span>Floor variant</span>
+              <span data-role="surface-variant-label">Floor variant</span>
               <select data-role="floor-variant-select">
-                <option value="normal">Normal</option>
-                <option value="up">Raised</option>
-                <option value="down">Lowered</option>
               </select>
             </label>
 
@@ -278,7 +292,7 @@ export function mountFreeformEditor(container) {
     selectedAssetId: BUILTIN_ASSETS[0].id,
     brushSize: 96,
     brushOpacity: 1,
-    floorVariant: "normal",
+    surfaceVariants: createInitialSurfaceVariants(),
     connectPaint: true,
     selectedStampId: null,
     hoverPoint: null,
@@ -332,6 +346,7 @@ export function mountFreeformEditor(container) {
     paintLayerSelect: byRole(container, "paint-layer-select"),
     brushSizeInput: byRole(container, "brush-size-input"),
     brushOpacityInput: byRole(container, "brush-opacity-input"),
+    surfaceVariantLabel: byRole(container, "surface-variant-label"),
     floorVariantSelect: byRole(container, "floor-variant-select"),
     connectPaintInput: byRole(container, "connect-paint-input"),
     showGridInput: byRole(container, "show-grid-input"),
@@ -394,6 +409,40 @@ export function mountFreeformEditor(container) {
 
   function activePaintLayer() {
     return ensureActivePaintLayer();
+  }
+
+  function currentSurfaceVariant(tool = state.selectedTool) {
+    return normalizeSurfaceVariant(tool, state.surfaceVariants[tool]);
+  }
+
+  function setSurfaceVariant(tool, variant) {
+    if (!surfaceToolSupportsVariants(tool)) {
+      return;
+    }
+
+    state.surfaceVariants[tool] = normalizeSurfaceVariant(tool, variant);
+  }
+
+  function syncSurfaceVariantOptions() {
+    const tool = TOOL_DEFS.find((entry) => entry.id === state.selectedTool) || TOOL_DEFS[0];
+    const supportsVariants = surfaceToolSupportsVariants(state.selectedTool);
+    const options = supportsVariants ? getSurfaceVariantOptions(state.selectedTool) : [];
+    const signature = `${state.selectedTool}|${options.map((entry) => entry.id).join(",")}`;
+
+    elements.surfaceVariantLabel.textContent = `${tool.label} variant`;
+    if (elements.floorVariantSelect.dataset.signature !== signature) {
+      elements.floorVariantSelect.innerHTML = "";
+      options.forEach((option) => {
+        const element = document.createElement("option");
+        element.value = option.id;
+        element.textContent = option.label;
+        elements.floorVariantSelect.append(element);
+      });
+      elements.floorVariantSelect.dataset.signature = signature;
+    }
+
+    elements.floorVariantSelect.disabled = !supportsVariants;
+    elements.floorVariantSelect.value = supportsVariants ? currentSurfaceVariant() : "";
   }
 
   function orderedStamps() {
@@ -611,7 +660,7 @@ export function mountFreeformEditor(container) {
   function updateBrushControls() {
     ensureActivePaintLayer();
     elements.paintLayerSelect.value = state.activePaintLayerId || "";
-    elements.floorVariantSelect.disabled = state.selectedTool !== "floor";
+    syncSurfaceVariantOptions();
   }
 
   function updateStatusBar() {
@@ -628,7 +677,7 @@ export function mountFreeformEditor(container) {
 
   function rebuildUsageList() {
     const tips = [
-      "Use Floor to block out the cavern silhouette, then switch Floor Variant to Raised or Lowered where you want elevation markers.",
+      "Use each brush variant to shift the material feel: Floor has Raised, Lowered, and Cracked Stone, while Wall, Water, Lava, and Chasm each include a more textured realistic option.",
       "Switch paint layers when one surface needs to sit cleanly above another. Layer 5 always renders above Layer 1.",
       "Hold Shift and click with a paint brush to draw a straight segment from the previous brush endpoint. Add Ctrl to lock it to 45-degree angles.",
       "Turn on Merge Touching Brush Marks if you want touching strokes of the same paint type to read as one surface.",
@@ -845,7 +894,7 @@ export function mountFreeformEditor(container) {
     syncPaintLayerSelect();
     elements.brushSizeInput.value = String(state.brushSize);
     elements.brushOpacityInput.value = String(Math.round(state.brushOpacity * 100));
-    elements.floorVariantSelect.value = state.floorVariant;
+    syncSurfaceVariantOptions();
     elements.connectPaintInput.checked = state.connectPaint;
     elements.showGridInput.checked = state.project.metadata.showGrid;
     elements.snapToGridInput.checked = state.project.metadata.snapToGrid;
@@ -955,7 +1004,7 @@ export function mountFreeformEditor(container) {
       selectedStampId: state.selectedStampId,
       hoverPoint: state.hoverPoint,
       selectedTool: state.selectedTool,
-      floorVariant: state.floorVariant,
+      surfaceVariant: currentSurfaceVariant(),
       brushSize: state.brushSize,
       layerSurface,
       detailPreview: currentAssetSelection(),
@@ -1125,7 +1174,8 @@ export function mountFreeformEditor(container) {
     const stroke = {
       id: makeId("stroke"),
       tool: state.selectedTool,
-      floorVariant: state.selectedTool === "floor" ? state.floorVariant : "normal",
+      surfaceVariant: currentSurfaceVariant(),
+      floorVariant: state.selectedTool === "floor" ? currentSurfaceVariant() : "normal",
       size: state.brushSize,
       opacity: state.brushOpacity,
       mergeTouches: state.selectedTool === "erase" ? false : state.connectPaint,
@@ -1155,7 +1205,8 @@ export function mountFreeformEditor(container) {
     const stroke = {
       id: makeId("stroke"),
       tool: state.selectedTool,
-      floorVariant: state.selectedTool === "floor" ? state.floorVariant : "normal",
+      surfaceVariant: currentSurfaceVariant(),
+      floorVariant: state.selectedTool === "floor" ? currentSurfaceVariant() : "normal",
       size: state.brushSize,
       opacity: state.brushOpacity,
       mergeTouches: state.selectedTool === "erase" ? false : state.connectPaint,
@@ -1568,9 +1619,14 @@ export function mountFreeformEditor(container) {
     });
 
     elements.floorVariantSelect.addEventListener("change", () => {
-      state.floorVariant = elements.floorVariantSelect.value;
-      if (state.selectedTool === "floor") {
-        setStatus(`Floor variant set to ${state.floorVariant}.`);
+      if (surfaceToolSupportsVariants(state.selectedTool)) {
+        setSurfaceVariant(state.selectedTool, elements.floorVariantSelect.value);
+        setStatus(
+          `${(TOOL_DEFS.find((entry) => entry.id === state.selectedTool) || TOOL_DEFS[0]).label} variant set to ${getSurfaceVariantLabel(
+            state.selectedTool,
+            currentSurfaceVariant()
+          )}.`
+        );
       }
       render();
     });

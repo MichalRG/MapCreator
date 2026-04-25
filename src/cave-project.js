@@ -1,3 +1,5 @@
+import { getStrokeSurfaceVariant } from "./cave-surface-variants.js";
+
 const PROJECT_VERSION = 5;
 const PROJECT_KIND = "cave-draft";
 const PROJECT_EXTENSION = ".caveforge.json";
@@ -70,14 +72,18 @@ export function touchProject(project) {
 function normalizeStroke(stroke) {
   const legacyTool = String(stroke.tool);
   const normalizedTool = legacyTool === "floor-up" || legacyTool === "floor-down" ? "floor" : legacyTool;
-  const floorVariant =
-    stroke.floorVariant ||
-    (legacyTool === "floor-up" ? "up" : legacyTool === "floor-down" ? "down" : "normal");
+  const legacyFloorVariant = legacyTool === "floor-up" ? "up" : legacyTool === "floor-down" ? "down" : undefined;
+  const surfaceVariant = getStrokeSurfaceVariant({
+    ...stroke,
+    tool: normalizedTool,
+    floorVariant: stroke.floorVariant || legacyFloorVariant
+  });
 
   return {
     id: String(stroke.id),
     tool: normalizedTool,
-    floorVariant: floorVariant === "up" || floorVariant === "down" ? floorVariant : "normal",
+    surfaceVariant,
+    floorVariant: normalizedTool === "floor" ? surfaceVariant : "normal",
     size: Number(stroke.size),
     opacity: Number(stroke.opacity),
     mergeTouches: stroke.mergeTouches !== undefined ? Boolean(stroke.mergeTouches) : true,

@@ -2,9 +2,11 @@ import { drawBuiltinAsset } from "./cave-assets.js";
 import { getStrokeSurfaceVariant } from "./cave-surface-variants.js";
 import { getPaintLayers } from "./cave-project.js";
 
-const CRACKED_FLOOR_TEXTURE = new Image();
-CRACKED_FLOOR_TEXTURE.decoding = "async";
-CRACKED_FLOOR_TEXTURE.src = new URL("../floor.png", import.meta.url).href;
+const CRACKED_FLOOR_TEXTURE = typeof Image === "function" ? new Image() : null;
+if (CRACKED_FLOOR_TEXTURE) {
+  CRACKED_FLOOR_TEXTURE.decoding = "async";
+  CRACKED_FLOOR_TEXTURE.src = new URL("../floor.png", import.meta.url).href;
+}
 
 let crackedFloorGroundTile = null;
 const proceduralPatternTiles = new Map();
@@ -75,7 +77,7 @@ function strokeRenderFamily(stroke) {
 }
 
 function getCrackedFloorGroundPattern(ctx) {
-  if (!CRACKED_FLOOR_TEXTURE.complete || !CRACKED_FLOOR_TEXTURE.naturalWidth) {
+  if (!CRACKED_FLOOR_TEXTURE?.complete || !CRACKED_FLOOR_TEXTURE.naturalWidth) {
     return null;
   }
 
@@ -441,37 +443,38 @@ function getWallLayers(stroke) {
   if (getStrokeSurfaceVariant(stroke) === "jagged") {
     return [
       {
-        shadowBlur: stroke.size * 0.14,
+        shadowBlur: stroke.size * 0.16,
         shadowColor: "rgba(0, 0, 0, 0.48)",
         strokeStyle: "#181311",
-        lineWidth: stroke.size
+        lineWidth: stroke.size * 0.98
       },
       {
         alpha: 0.88,
         strokeStyle: (ctx) => getProceduralPattern(ctx, "wall-jagged") || "rgba(91, 77, 66, 0.5)",
-        lineWidth: stroke.size * 0.84,
-        pathScale: 0.84
+        lineWidth: stroke.size * 0.74,
+        pathScale: 0.74
       },
       {
-        alpha: 0.34,
-        strokeStyle: "rgba(206, 188, 166, 0.24)",
-        lineWidth: stroke.size * 0.32,
-        pathScale: 0.32
+        alpha: 0.26,
+        strokeStyle: "rgba(206, 188, 166, 0.16)",
+        lineWidth: stroke.size * 0.88,
+        pathScale: 0.88
       }
     ];
   }
 
   return [
     {
-      shadowBlur: stroke.size * 0.12,
+      shadowBlur: stroke.size * 0.15,
       shadowColor: "rgba(0, 0, 0, 0.45)",
       strokeStyle: "#1c1714",
-      lineWidth: stroke.size
+      lineWidth: stroke.size * 0.94
     },
     {
-      strokeStyle: "rgba(88, 76, 68, 0.4)",
-      lineWidth: stroke.size * 0.78,
-      pathScale: 0.78
+      alpha: 0.76,
+      strokeStyle: "rgba(88, 76, 68, 0.44)",
+      lineWidth: stroke.size * 0.68,
+      pathScale: 0.68
     }
   ];
 }
@@ -879,6 +882,28 @@ function strokeGroupKey(stroke) {
   return `${strokeRenderFamily(stroke)}|${stroke.size}|${stroke.opacity}`;
 }
 
+export function orderPaintStrokesForRendering(strokes) {
+  const background = [];
+  const surfaces = [];
+  const erase = [];
+
+  strokes.forEach((stroke) => {
+    if (stroke.tool === "erase") {
+      erase.push(stroke);
+      return;
+    }
+
+    if (stroke.tool === "wall") {
+      background.push(stroke);
+      return;
+    }
+
+    surfaces.push(stroke);
+  });
+
+  return [...background, ...surfaces, ...erase];
+}
+
 function renderPaintSequence(ctx, strokes) {
   let mergeBatch = [];
   let activeGroupKey = null;
@@ -892,7 +917,7 @@ function renderPaintSequence(ctx, strokes) {
     activeGroupKey = null;
   }
 
-  strokes.forEach((stroke) => {
+  orderPaintStrokesForRendering(strokes).forEach((stroke) => {
     if (stroke.tool === "erase") {
       flushMergeBatch();
       drawEraseStroke(ctx, stroke);

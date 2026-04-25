@@ -4,6 +4,7 @@ import {
   getSurfaceVariantLabel,
   getSurfaceVariantOptions,
   normalizeSurfaceVariant,
+  resolveSurfaceBrushSelection,
   surfaceToolSupportsVariants
 } from "./cave-surface-variants.js";
 import {
@@ -39,7 +40,7 @@ const PAGE_PRESETS = [
 
 const TOOL_DEFS = [
   { id: "floor", label: "Floor", description: "Carve chambers, tunnels, and walkable passages." },
-  { id: "wall", label: "Wall", description: "Push rock back in and tighten silhouettes." },
+  { id: "wall", label: "Parent Rock", description: "Paint the cave background mass so floor, water, lava, and chasms can sit on top of it." },
   { id: "water", label: "Water", description: "Paint underground pools and streams." },
   { id: "lava", label: "Lava", description: "Add glowing magma cuts and vents." },
   { id: "chasm", label: "Chasm", description: "Mark deep cracks, drops, and voids." },
@@ -415,6 +416,10 @@ export function mountFreeformEditor(container) {
     return normalizeSurfaceVariant(tool, state.surfaceVariants[tool]);
   }
 
+  function activeSurfaceBrushSelection() {
+    return resolveSurfaceBrushSelection(state.selectedTool, currentSurfaceVariant());
+  }
+
   function setSurfaceVariant(tool, variant) {
     if (!surfaceToolSupportsVariants(tool)) {
       return;
@@ -429,7 +434,7 @@ export function mountFreeformEditor(container) {
     const options = supportsVariants ? getSurfaceVariantOptions(state.selectedTool) : [];
     const signature = `${state.selectedTool}|${options.map((entry) => entry.id).join(",")}`;
 
-    elements.surfaceVariantLabel.textContent = `${tool.label} variant`;
+    elements.surfaceVariantLabel.textContent = state.selectedTool === "floor" ? "Floor type" : `${tool.label} variant`;
     if (elements.floorVariantSelect.dataset.signature !== signature) {
       elements.floorVariantSelect.innerHTML = "";
       options.forEach((option) => {
@@ -677,10 +682,11 @@ export function mountFreeformEditor(container) {
 
   function rebuildUsageList() {
     const tips = [
-      "Use each brush variant to shift the material feel: Floor has Raised, Lowered, and Cracked Stone, while Wall, Water, Lava, and Chasm each include a more textured realistic option.",
+      "Use each brush variant to shift the material feel: Floor includes Raised, Lowered, Cracked Stone, and Parent Rock options, while Parent Rock, Water, Lava, and Chasm each include a more textured realistic option.",
       "Switch paint layers when one surface needs to sit cleanly above another. Layer 5 always renders above Layer 1.",
       "Hold Shift and click with a paint brush to draw a straight segment from the previous brush endpoint. Add Ctrl to lock it to 45-degree angles.",
       "Turn on Merge Touching Brush Marks if you want touching strokes of the same paint type to read as one surface.",
+      "Parent Rock acts like the cave background inside a layer, so later floor and water shapes still render on top of it.",
       "Water, Lava, and Chasm brushes work as fast encounter overlays on top of carved floor.",
       "Use Rubber to carve away parts of any painted surface without deleting placed details.",
       "Pick Detail to place props; use Select to drag them and Erase Detail to remove them.",
@@ -799,6 +805,7 @@ export function mountFreeformEditor(container) {
         ["Active layer strokes", activeLayerStrokes.length],
         ["Active layer details", state.project.stamps.filter((stamp) => stamp.layerId === activePaintLayer()?.id).length],
         ["Floor strokes", allStrokes.filter((stroke) => stroke.tool === "floor").length],
+        ["Parent rock strokes", allStrokes.filter((stroke) => stroke.tool === "wall").length],
         ["Water strokes", allStrokes.filter((stroke) => stroke.tool === "water").length],
         ["Lava strokes", allStrokes.filter((stroke) => stroke.tool === "lava").length],
         ["Chasm strokes", allStrokes.filter((stroke) => stroke.tool === "chasm").length]
@@ -903,7 +910,7 @@ export function mountFreeformEditor(container) {
 
   function populateToolPalette() {
     elements.toolPalette.innerHTML = "";
-    TOOL_DEFS.forEach((tool) => {
+    TOOL_DEFS.filter((tool) => !tool.hidden).forEach((tool) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = `tool-button ${tool.id === state.selectedTool ? "active" : ""}`;
@@ -987,6 +994,8 @@ export function mountFreeformEditor(container) {
   }
 
   function flushRender() {
+    const activeSurfaceBrush = SURFACE_BRUSH_TOOLS.has(state.selectedTool) ? activeSurfaceBrushSelection() : null;
+
     ensureActivePaintLayer();
     updateProjectHeader();
     updateProjectMeta();
@@ -1003,8 +1012,8 @@ export function mountFreeformEditor(container) {
       imageCache: state.imageCache,
       selectedStampId: state.selectedStampId,
       hoverPoint: state.hoverPoint,
-      selectedTool: state.selectedTool,
-      surfaceVariant: currentSurfaceVariant(),
+      selectedTool: activeSurfaceBrush?.tool || state.selectedTool,
+      surfaceVariant: activeSurfaceBrush?.surfaceVariant || currentSurfaceVariant(),
       brushSize: state.brushSize,
       layerSurface,
       detailPreview: currentAssetSelection(),
@@ -1017,7 +1026,7 @@ export function mountFreeformEditor(container) {
           ? {
               start: state.paintLineAnchor,
               end: resolvePaintLineEnd(state.paintLineAnchor, state.hoverPoint, angleConstraintPressed),
-              tool: state.selectedTool,
+              tool: activeSurfaceBrush?.tool || state.selectedTool,
               size: state.brushSize
             }
           : null
@@ -1171,11 +1180,12 @@ export function mountFreeformEditor(container) {
       return;
     }
 
+    const activeSurfaceBrush = activeSurfaceBrushSelection();
     const stroke = {
       id: makeId("stroke"),
-      tool: state.selectedTool,
-      surfaceVariant: currentSurfaceVariant(),
-      floorVariant: state.selectedTool === "floor" ? currentSurfaceVariant() : "normal",
+      tool: activeSurfaceBrush.tool,
+      surfaceVariant: activeSurfaceBrush.surfaceVariant,
+      floorVariant: activeSurfaceBrush.tool === "floor" ? activeSurfaceBrush.surfaceVariant : "normal",
       size: state.brushSize,
       opacity: state.brushOpacity,
       mergeTouches: state.selectedTool === "erase" ? false : state.connectPaint,
@@ -1202,11 +1212,12 @@ export function mountFreeformEditor(container) {
 
     const start = clampToPage(fromPoint);
     const end = clampToPage(toPoint);
+    const activeSurfaceBrush = activeSurfaceBrushSelection();
     const stroke = {
       id: makeId("stroke"),
-      tool: state.selectedTool,
-      surfaceVariant: currentSurfaceVariant(),
-      floorVariant: state.selectedTool === "floor" ? currentSurfaceVariant() : "normal",
+      tool: activeSurfaceBrush.tool,
+      surfaceVariant: activeSurfaceBrush.surfaceVariant,
+      floorVariant: activeSurfaceBrush.tool === "floor" ? activeSurfaceBrush.surfaceVariant : "normal",
       size: state.brushSize,
       opacity: state.brushOpacity,
       mergeTouches: state.selectedTool === "erase" ? false : state.connectPaint,

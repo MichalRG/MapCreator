@@ -3,11 +3,13 @@ export const SURFACE_VARIANT_DEFS = Object.freeze({
     Object.freeze({ id: "normal", label: "Normal" }),
     Object.freeze({ id: "up", label: "Raised" }),
     Object.freeze({ id: "down", label: "Lowered" }),
-    Object.freeze({ id: "cracked", label: "Cracked Stone" })
+    Object.freeze({ id: "cracked", label: "Cracked Stone" }),
+    Object.freeze({ id: "wall", label: "Parent Rock" }),
+    Object.freeze({ id: "wall-jagged", label: "Jagged Parent Rock" })
   ]),
   wall: Object.freeze([
-    Object.freeze({ id: "normal", label: "Normal" }),
-    Object.freeze({ id: "jagged", label: "Jagged Rock" })
+    Object.freeze({ id: "normal", label: "Smooth Parent Rock" }),
+    Object.freeze({ id: "jagged", label: "Jagged Parent Rock" })
   ]),
   water: Object.freeze([
     Object.freeze({ id: "normal", label: "Normal" }),
@@ -42,6 +44,35 @@ export function normalizeSurfaceVariant(tool, variant) {
 
 export function getSurfaceVariantLabel(tool, variant) {
   return getSurfaceVariantOptions(tool).find((entry) => entry.id === variant)?.label || getSurfaceVariantOptions(tool)[0]?.label || "Normal";
+}
+
+export function resolveSurfaceBrushSelection(tool, variant) {
+  const normalizedTool = String(tool || "");
+  const normalizedVariant = normalizeSurfaceVariant(normalizedTool, variant);
+
+  if (normalizedTool === "floor") {
+    if (normalizedVariant === "wall") {
+      return {
+        tool: "wall",
+        surfaceVariant: "normal",
+        paletteVariant: normalizedVariant
+      };
+    }
+
+    if (normalizedVariant === "wall-jagged") {
+      return {
+        tool: "wall",
+        surfaceVariant: "jagged",
+        paletteVariant: normalizedVariant
+      };
+    }
+  }
+
+  return {
+    tool: normalizedTool,
+    surfaceVariant: normalizedVariant,
+    paletteVariant: normalizedVariant
+  };
 }
 
 export function getStrokeSurfaceVariant(stroke) {

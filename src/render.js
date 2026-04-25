@@ -91,19 +91,23 @@ function drawOverlayMarker(ctx, overlayId, center, size, mapConfig, builtinIconC
   ctx.fillText(overlay.marker, center.x, center.y + 1);
 }
 
-function drawCustomPlacements(ctx, project, cell, size, imageCache) {
+export function createCustomPlacementLookup(project) {
+  return {
+    placementsById: new Map(project.customPlacements.map((placement) => [placement.id, placement])),
+    symbolsById: new Map(project.customSymbols.map((symbol) => [symbol.id, symbol]))
+  };
+}
+
+function drawCustomPlacements(ctx, cell, size, imageCache, placementLookup, center) {
   if (!cell.customPlacementIds.length) {
     return;
   }
 
-  const center = getCellCenter(project, cell.col, cell.row, size);
   const visibleSize = size * 0.82;
 
   cell.customPlacementIds.forEach((placementId, index) => {
-    const placement = project.customPlacements.find((entry) => entry.id === placementId);
-    const symbol = placement
-      ? project.customSymbols.find((entry) => entry.id === placement.symbolId)
-      : null;
+    const placement = placementLookup.placementsById.get(placementId);
+    const symbol = placement ? placementLookup.symbolsById.get(placement.symbolId) : null;
 
     if (!placement || !symbol) {
       return;
@@ -169,6 +173,7 @@ function drawHighlight(ctx, project, cell, size, fillStyle, strokeStyle) {
 
 function drawMap(ctx, options) {
   const { project, size, hoverCell, selectedCell, pendingEdgeCell, imageCache, builtinIconCache, mapConfig } = options;
+  const placementLookup = createCustomPlacementLookup(project);
 
   project.cells.forEach((cell) => {
     drawTerrain(ctx, project, cell, size, mapConfig);
@@ -191,7 +196,7 @@ function drawMap(ctx, options) {
         builtinIconCache
       );
     });
-    drawCustomPlacements(ctx, project, cell, size, imageCache);
+    drawCustomPlacements(ctx, cell, size, imageCache, placementLookup, center);
   });
 
   if (hoverCell) {

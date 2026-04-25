@@ -238,6 +238,7 @@ export function mountGridEditor(container) {
 
   let activeMode = false;
   let spacePressed = false;
+  let renderFrameId = 0;
 
   const elements = {
     canvas: byRole(container, "map-canvas"),
@@ -666,7 +667,7 @@ export function mountGridEditor(container) {
     render();
   }
 
-  function render() {
+  function flushRender() {
     ensureActiveSelections();
     drawScene(canvasContext, {
       project: state.project,
@@ -686,6 +687,17 @@ export function mountGridEditor(container) {
     updateCanvasActivationUi();
     updateStatusBar();
     rebuildInspector();
+  }
+
+  function render() {
+    if (renderFrameId) {
+      return;
+    }
+
+    renderFrameId = requestAnimationFrame(() => {
+      renderFrameId = 0;
+      flushRender();
+    });
   }
 
   function centerMap() {
@@ -1329,7 +1341,9 @@ export function mountGridEditor(container) {
 
   function handlePointerMove(event) {
     const cell = cellFromPointer(event.clientX, event.clientY);
-    state.hoverCellKey = cell ? cellKey(cell.col, cell.row) : null;
+    const nextHoverCellKey = cell ? cellKey(cell.col, cell.row) : null;
+    const hoverChanged = nextHoverCellKey !== state.hoverCellKey;
+    state.hoverCellKey = nextHoverCellKey;
 
     if (state.drag.mode === "pan") {
       state.viewport.offsetX += event.clientX - state.drag.startX;
@@ -1345,7 +1359,9 @@ export function mountGridEditor(container) {
       return;
     }
 
-    render();
+    if (hoverChanged) {
+      render();
+    }
   }
 
   function handlePointerUp() {

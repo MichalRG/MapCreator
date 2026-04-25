@@ -533,11 +533,25 @@ function renderPaintSequence(ctx, strokes) {
   flushMergeBatch();
 }
 
-function createLayerCanvas(project) {
-  const layerCanvas = document.createElement("canvas");
-  layerCanvas.width = Math.max(1, Math.ceil(project.metadata.width));
-  layerCanvas.height = Math.max(1, Math.ceil(project.metadata.height));
-  return layerCanvas;
+function resolveLayerSurface(project, layerSurface = null) {
+  const layerCanvas = layerSurface?.canvas || document.createElement("canvas");
+  const layerCtx = layerSurface?.ctx || layerCanvas.getContext("2d");
+  const width = Math.max(1, Math.ceil(project.metadata.width));
+  const height = Math.max(1, Math.ceil(project.metadata.height));
+
+  if (!layerCtx) {
+    return null;
+  }
+
+  if (layerCanvas.width !== width) {
+    layerCanvas.width = width;
+  }
+
+  if (layerCanvas.height !== height) {
+    layerCanvas.height = height;
+  }
+
+  return { canvas: layerCanvas, ctx: layerCtx };
 }
 
 function drawGrid(ctx, width, height, gridSize) {
@@ -661,9 +675,13 @@ function drawStamps(ctx, stamps, imageCache, selectedStampId) {
   stamps.forEach((stamp) => drawStamp(ctx, stamp, imageCache, selectedStampId));
 }
 
-function drawLayerStack(ctx, project, imageCache, selectedStampId) {
-  const layerCanvas = createLayerCanvas(project);
-  const layerCtx = layerCanvas.getContext("2d");
+function drawLayerStack(ctx, project, imageCache, selectedStampId, layerSurface = null) {
+  const resolvedLayerSurface = resolveLayerSurface(project, layerSurface);
+  if (!resolvedLayerSurface) {
+    return;
+  }
+
+  const { canvas: layerCanvas, ctx: layerCtx } = resolvedLayerSurface;
   const stampsByLayer = groupStampsByLayer(project);
 
   getPaintLayers(project).forEach((layer) => {
@@ -770,7 +788,8 @@ function pointInPage(project, point) {
 }
 
 function drawProject(ctx, options) {
-  const { project, imageCache, selectedStampId, hoverPoint, selectedTool, floorVariant, brushSize, detailPreview, linePreview } = options;
+  const { project, imageCache, selectedStampId, hoverPoint, selectedTool, floorVariant, brushSize, detailPreview, linePreview, layerSurface } =
+    options;
 
   drawPage(ctx, project);
 
@@ -778,7 +797,7 @@ function drawProject(ctx, options) {
     drawGrid(ctx, project.metadata.width, project.metadata.height, project.metadata.gridSize);
   }
 
-  drawLayerStack(ctx, project, imageCache, selectedStampId);
+  drawLayerStack(ctx, project, imageCache, selectedStampId, layerSurface);
 
   if (pointInPage(project, hoverPoint)) {
     if (["floor", "wall", "water", "lava", "chasm", "erase"].includes(selectedTool)) {

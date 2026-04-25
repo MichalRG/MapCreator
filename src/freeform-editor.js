@@ -298,7 +298,7 @@ export function mountFreeformEditor(container) {
       mode: null,
       startX: 0,
       startY: 0,
-      activeStrokeId: null,
+      activeStroke: null,
       stampPointerOffsetX: 0,
       stampPointerOffsetY: 0
     },
@@ -312,6 +312,12 @@ export function mountFreeformEditor(container) {
   let spacePressed = false;
   let shiftPressed = false;
   let angleConstraintPressed = false;
+  let renderFrameId = 0;
+  const layerSurfaceCanvas = document.createElement("canvas");
+  const layerSurface = {
+    canvas: layerSurfaceCanvas,
+    ctx: layerSurfaceCanvas.getContext("2d")
+  };
 
   const elements = {
     canvas: byRole(container, "map-canvas"),
@@ -537,6 +543,7 @@ export function mountFreeformEditor(container) {
 
     pushHistory(state.transactionSnapshot);
     state.transactionSnapshot = null;
+    state.drag.activeStroke = null;
     touchProject(state.project);
     state.isDirty = true;
     setStatus(message);
@@ -545,6 +552,7 @@ export function mountFreeformEditor(container) {
 
   function cancelTransaction() {
     state.transactionSnapshot = null;
+    state.drag.activeStroke = null;
   }
 
   function applyMutation(message, mutator) {
@@ -929,7 +937,7 @@ export function mountFreeformEditor(container) {
     state.imageCache = nextCache;
   }
 
-  function render() {
+  function flushRender() {
     ensureActivePaintLayer();
     updateProjectHeader();
     updateProjectMeta();
@@ -949,6 +957,7 @@ export function mountFreeformEditor(container) {
       selectedTool: state.selectedTool,
       floorVariant: state.floorVariant,
       brushSize: state.brushSize,
+      layerSurface,
       detailPreview: currentAssetSelection(),
       linePreview:
         shiftPressed &&
@@ -963,6 +972,17 @@ export function mountFreeformEditor(container) {
               size: state.brushSize
             }
           : null
+    });
+  }
+
+  function render() {
+    if (renderFrameId) {
+      return;
+    }
+
+    renderFrameId = requestAnimationFrame(() => {
+      renderFrameId = 0;
+      flushRender();
     });
   }
 
@@ -1000,7 +1020,7 @@ export function mountFreeformEditor(container) {
     state.hoverPoint = null;
     state.paintLineAnchor = null;
     state.drag.mode = null;
-    state.drag.activeStrokeId = null;
+    state.drag.activeStroke = null;
     state.transactionSnapshot = null;
     state.isDirty = false;
     if (!preserveHandle) {
@@ -1046,6 +1066,7 @@ export function mountFreeformEditor(container) {
     state.selectedStampId = state.project.stamps.some((stamp) => stamp.id === state.selectedStampId) ? state.selectedStampId : null;
     state.paintLineAnchor = null;
     state.transactionSnapshot = null;
+    state.drag.activeStroke = null;
     state.isDirty = true;
     updateCustomImageCache();
     syncFormWithProject();
@@ -1065,6 +1086,7 @@ export function mountFreeformEditor(container) {
     state.selectedStampId = state.project.stamps.some((stamp) => stamp.id === state.selectedStampId) ? state.selectedStampId : null;
     state.paintLineAnchor = null;
     state.transactionSnapshot = null;
+    state.drag.activeStroke = null;
     state.isDirty = true;
     updateCustomImageCache();
     syncFormWithProject();
@@ -1073,7 +1095,7 @@ export function mountFreeformEditor(container) {
   }
 
   function appendPointToActiveStroke(point) {
-    const stroke = getAllPaintStrokes(state.project).find((entry) => entry.id === state.drag.activeStrokeId);
+    const stroke = state.drag.activeStroke;
     if (!stroke) {
       return;
     }
@@ -1111,7 +1133,7 @@ export function mountFreeformEditor(container) {
     };
 
     layer.strokes.push(stroke);
-    state.drag.activeStrokeId = stroke.id;
+    state.drag.activeStroke = stroke;
     state.selectedStampId = null;
     setPaintLineAnchor(stroke.points[stroke.points.length - 1]);
     touchProject(state.project);
@@ -1141,7 +1163,7 @@ export function mountFreeformEditor(container) {
     };
 
     layer.strokes.push(stroke);
-    state.drag.activeStrokeId = null;
+    state.drag.activeStroke = null;
     state.selectedStampId = null;
     setPaintLineAnchor(end);
     touchProject(state.project);
@@ -1339,7 +1361,7 @@ export function mountFreeformEditor(container) {
     }
 
     state.drag.mode = null;
-    state.drag.activeStrokeId = null;
+    state.drag.activeStroke = null;
   }
 
   function handleWheel(event) {

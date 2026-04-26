@@ -55,7 +55,10 @@ export const MAP_TYPE_DEFS = {
       cave: { label: "Cave", marker: "Cv", fill: "#545454", icon: BUILTIN_ICON_URLS.overlay.cave },
       tower: { label: "Tower", marker: "T", fill: "#334b60", icon: BUILTIN_ICON_URLS.overlay.tower },
       special_place: { label: "Special Place", marker: "*", fill: "#8d3f4a", icon: BUILTIN_ICON_URLS.overlay.special_place },
-      camp: { label: "Camp", marker: "Cp", fill: "#8a5b2a", icon: BUILTIN_ICON_URLS.overlay.camp }
+      camp: { label: "Camp", marker: "Cp", fill: "#8a5b2a", icon: BUILTIN_ICON_URLS.overlay.camp },
+      quarry: { label: "Quarry", marker: "Q", fill: "#71695f", icon: BUILTIN_ICON_URLS.overlay.quarry },
+      lumber_camp: { label: "Lumberjack's Camp", marker: "Lc", fill: "#577046", icon: BUILTIN_ICON_URLS.overlay.lumber_camp },
+      well: { label: "Well", marker: "W", fill: "#4d7a90", icon: BUILTIN_ICON_URLS.overlay.well }
     },
     edgeDefs: {
       river: { label: "River", stroke: "#2f6f9e", lineWidth: 7, dash: [], icon: BUILTIN_ICON_URLS.edge.river },

@@ -17,13 +17,22 @@ test("getToolDef falls back to the first tool definition", () => {
 test("listBuiltinAssetDefs combines terrain, overlay, and edge assets for a map type", () => {
   const caveAssets = listBuiltinAssetDefs("cave");
   const cave = MAP_TYPE_DEFS.cave;
+  const worldAssets = listBuiltinAssetDefs("hex-world");
+  const world = MAP_TYPE_DEFS["hex-world"];
 
   assert.equal(
     caveAssets.length,
     Object.keys(cave.terrainDefs).length + Object.keys(cave.overlayDefs).length + Object.keys(cave.edgeDefs).length
   );
+  assert.equal(
+    worldAssets.length,
+    Object.keys(world.terrainDefs).length + Object.keys(world.overlayDefs).length + Object.keys(world.edgeDefs).length
+  );
   assert.ok(caveAssets.some((asset) => asset.label === "Treasure"));
   assert.ok(caveAssets.some((asset) => asset.label === "Tunnel"));
+  assert.ok(worldAssets.some((asset) => asset.label === "Quarry"));
+  assert.ok(worldAssets.some((asset) => asset.label === "Lumberjack's Camp"));
+  assert.ok(worldAssets.some((asset) => asset.label === "Well"));
 });
 
 test("builtin icon urls are embedded svg data urls", () => {

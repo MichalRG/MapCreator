@@ -169,6 +169,37 @@ export const BUILTIN_ICON_URLS = {
         </g>
       </svg>
     `),
+    quarry: svgToDataUrl(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <g fill="#9f9a92" stroke="#625b53" stroke-linejoin="round" stroke-width="1.1">
+          <path d="M4 18h16l-2.5-5-4.5 1-3.2-4L6.5 11Z" />
+          <path d="M6.5 11h4.2l2.3 3H8.2Z" fill="#cfc8bf" />
+          <path d="M14.7 8.2 17.8 11M16.7 7l1.6 1.5" fill="none" stroke="#7b5427" stroke-linecap="round" />
+        </g>
+      </svg>
+    `),
+    lumber_camp: svgToDataUrl(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.5 18h15" stroke="#6d4a28" stroke-width="1.3" />
+          <path d="M7 18v-5l4.8-3.4L17 13v5Z" fill="#b7844d" stroke="#6d4a28" stroke-width="1.2" />
+          <path d="M9 18v-2.7h2V18" fill="#f2e5cd" stroke="#6d4a28" stroke-width="1.1" />
+          <path d="M5.5 10.5 8 8M6 13l3-3" stroke="#49643c" stroke-width="1.4" />
+          <path d="M15.2 9.2c0-1.8 1.3-3.2 3-3.2M18.2 6c0 1.7-1.3 3-3 3" stroke="#49643c" stroke-width="1.3" />
+        </g>
+      </svg>
+    `),
+    well: svgToDataUrl(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 18h12" stroke="#6e4d2c" stroke-width="1.3" />
+          <path d="M7.5 18v-5.5h9V18" fill="#9c7853" stroke="#6e4d2c" stroke-width="1.2" />
+          <path d="M9 12.5V8h6v4.5" stroke="#6e4d2c" stroke-width="1.2" />
+          <path d="M12 8v3.2" stroke="#6e4d2c" stroke-width="1.2" />
+          <circle cx="12" cy="11.7" r="2.1" fill="#7db7d5" stroke="#497792" stroke-width="1.1" />
+        </g>
+      </svg>
+    `),
     entrance: svgToDataUrl(`
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
         <g fill="none" stroke-linejoin="round" stroke-linecap="round">

@@ -24,7 +24,9 @@ test("buildEmptyCells creates a complete rectangular grid", () => {
     col: 1,
     row: 2,
     terrain: "rock",
+    terrainLabel: "",
     overlays: [],
+    overlayLabels: {},
     customPlacementIds: []
   });
 });

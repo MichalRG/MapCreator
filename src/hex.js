@@ -17,7 +17,9 @@ export function buildEmptyCells(width, height, defaultTerrain = "plains") {
         col,
         row,
         terrain: defaultTerrain,
+        terrainLabel: "",
         overlays: [],
+        overlayLabels: {},
         customPlacementIds: []
       });
     }

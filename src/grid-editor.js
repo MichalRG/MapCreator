@@ -531,7 +531,9 @@ export function mountGridEditor(container) {
       }
 
       targetCell.terrain = config.defaultTerrain;
+      targetCell.terrainLabel = "";
       targetCell.overlays = [];
+      targetCell.overlayLabels = {};
       const placementIds = new Set(targetCell.customPlacementIds);
       targetCell.customPlacementIds = [];
       project.customPlacements = project.customPlacements.filter((placement) => !placementIds.has(placement.id));
@@ -559,6 +561,65 @@ export function mountGridEditor(container) {
     });
   }
 
+  function createInspectorTextField({ label, value, placeholder, onCommit }) {
+    const field = document.createElement("label");
+    field.className = "field";
+
+    const caption = document.createElement("span");
+    caption.textContent = label;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = value;
+    input.placeholder = placeholder;
+    input.addEventListener("change", () => onCommit(input.value));
+
+    field.append(caption, input);
+    return field;
+  }
+
+  function updateTerrainLabel(col, row, nextValue) {
+    const label = nextValue.trim();
+    const current = getCell(state.project, col, row)?.terrainLabel || "";
+    if (label === current) {
+      return;
+    }
+
+    applyMutation(label ? "Updated terrain label." : "Cleared terrain label.", (project) => {
+      const targetCell = getCell(project, col, row);
+      if (!targetCell) {
+        return;
+      }
+
+      targetCell.terrainLabel = label;
+    });
+  }
+
+  function updateOverlayLabel(col, row, overlayId, nextValue) {
+    const label = nextValue.trim();
+    const current = getCell(state.project, col, row)?.overlayLabels?.[overlayId] || "";
+    if (label === current) {
+      return;
+    }
+
+    applyMutation(
+      label ? `Updated ${currentMapConfig().overlayDefs[overlayId].label} label.` : `Cleared ${currentMapConfig().overlayDefs[overlayId].label} label.`,
+      (project) => {
+        const targetCell = getCell(project, col, row);
+        if (!targetCell) {
+          return;
+        }
+
+        targetCell.overlayLabels ||= {};
+        if (label) {
+          targetCell.overlayLabels[overlayId] = label;
+        } else {
+          delete targetCell.overlayLabels[overlayId];
+        }
+      }
+    );
+  }
+
   function rebuildInspector() {
     const config = currentMapConfig();
     const terrainDefs = config.terrainDefs;
@@ -579,6 +640,14 @@ export function mountGridEditor(container) {
     terrainText.className = "muted";
     terrainText.textContent = `${config.terrainPanelTitle}: ${terrainDefs[cell.terrain].label}`;
     summary.append(terrainText);
+    summary.append(
+      createInspectorTextField({
+        label: "Terrain label",
+        value: cell.terrainLabel || "",
+        placeholder: "Optional label shown above this terrain",
+        onCommit: (value) => updateTerrainLabel(cell.col, cell.row, value)
+      })
+    );
 
     const overlayCard = addInspectorCard(config.overlayInspectorTitle);
     if (!cell.overlays.length) {
@@ -590,20 +659,40 @@ export function mountGridEditor(container) {
       const tagList = document.createElement("div");
       tagList.className = "tag-list";
       cell.overlays.forEach((overlayId) => {
-        const tag = document.createElement("span");
-        tag.className = "inspector-tag";
-        tag.innerHTML = `<span>${overlayDefs[overlayId].label}</span>`;
+        const row = document.createElement("div");
+        row.className = "palette-row";
+
+        const main = document.createElement("div");
+        main.className = "palette-row-main";
+
+        const name = document.createElement("p");
+        name.className = "muted";
+        name.textContent = overlayDefs[overlayId].label;
+        main.append(name);
+        main.append(
+          createInspectorTextField({
+            label: "Feature label",
+            value: cell.overlayLabels?.[overlayId] || "",
+            placeholder: "Optional label shown above this feature",
+            onCommit: (value) => updateOverlayLabel(cell.col, cell.row, overlayId, value)
+          })
+        );
+
         const removeButton = document.createElement("button");
         removeButton.type = "button";
-        removeButton.textContent = "x";
+        removeButton.className = "palette-row-remove";
+        removeButton.textContent = "Remove";
         removeButton.addEventListener("click", () => {
           applyMutation(`Removed ${overlayDefs[overlayId].label}.`, (project) => {
             const target = getCell(project, cell.col, cell.row);
             target.overlays = target.overlays.filter((entry) => entry !== overlayId);
+            if (target.overlayLabels) {
+              delete target.overlayLabels[overlayId];
+            }
           });
         });
-        tag.append(removeButton);
-        tagList.append(tag);
+        row.append(main, removeButton);
+        tagList.append(row);
       });
       overlayCard.append(tagList);
     }
@@ -883,12 +972,21 @@ export function mountGridEditor(container) {
 
     if (targetCell.overlays.includes(state.activeOverlay)) {
       targetCell.overlays = targetCell.overlays.filter((entry) => entry !== state.activeOverlay);
+      if (targetCell.overlayLabels) {
+        delete targetCell.overlayLabels[state.activeOverlay];
+      }
       return true;
     }
 
     const exclusives = currentMapConfig().exclusiveOverlayIds;
     if (exclusives?.has(state.activeOverlay)) {
+      const removedOverlayIds = targetCell.overlays.filter((entry) => exclusives.has(entry));
       targetCell.overlays = targetCell.overlays.filter((entry) => !exclusives.has(entry));
+      if (targetCell.overlayLabels) {
+        removedOverlayIds.forEach((overlayId) => {
+          delete targetCell.overlayLabels[overlayId];
+        });
+      }
     }
 
     targetCell.overlays.push(state.activeOverlay);

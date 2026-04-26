@@ -31,11 +31,26 @@ export function touchProject(project) {
 }
 
 function normalizeCells(cells) {
+  const normalizeLabel = (value) => (typeof value === "string" ? value.trim() : "");
+  const normalizeOverlayLabels = (value) => {
+    if (!value || typeof value !== "object") {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([overlayId, label]) => [overlayId, normalizeLabel(label)])
+        .filter(([, label]) => label)
+    );
+  };
+
   return cells.map((cell) => ({
     col: cell.col,
     row: cell.row,
     terrain: cell.terrain,
+    terrainLabel: normalizeLabel(cell.terrainLabel),
     overlays: Array.isArray(cell.overlays) ? [...cell.overlays] : [],
+    overlayLabels: normalizeOverlayLabels(cell.overlayLabels),
     customPlacementIds: Array.isArray(cell.customPlacementIds) ? [...cell.customPlacementIds] : []
   }));
 }

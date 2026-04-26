@@ -91,6 +91,61 @@ function drawOverlayMarker(ctx, overlayId, center, size, mapConfig, builtinIconC
   ctx.fillText(overlay.marker, center.x, center.y + 1);
 }
 
+function listCellLabels(cell) {
+  const labels = [];
+  const terrainLabel = typeof cell.terrainLabel === "string" ? cell.terrainLabel.trim() : "";
+  if (terrainLabel) {
+    labels.push({ text: terrainLabel, kind: "terrain" });
+  }
+
+  if (!cell.overlayLabels || typeof cell.overlayLabels !== "object") {
+    return labels;
+  }
+
+  cell.overlays.forEach((overlayId) => {
+    const overlayLabel = typeof cell.overlayLabels[overlayId] === "string" ? cell.overlayLabels[overlayId].trim() : "";
+    if (overlayLabel) {
+      labels.push({ text: overlayLabel, kind: "overlay" });
+    }
+  });
+
+  return labels;
+}
+
+function drawCellLabels(ctx, center, labels, size, mapConfig) {
+  if (!labels.length) {
+    return;
+  }
+
+  const fontSize = mapConfig.layout === "square" ? 11 : 12;
+  const labelHeight = fontSize + 8;
+  const labelGap = 4;
+  const baseY = center.y - (mapConfig.layout === "square" ? size * 0.72 : size * 0.92);
+
+  ctx.save();
+  ctx.font = `600 ${fontSize}px "Trebuchet MS", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  labels.forEach((label, index) => {
+    const y = baseY - index * (labelHeight + labelGap);
+    const width = Math.ceil(ctx.measureText(label.text).width) + 16;
+    const x = center.x - width / 2;
+    const top = y - labelHeight / 2;
+
+    ctx.fillStyle = label.kind === "terrain" ? "rgba(36, 29, 24, 0.86)" : "rgba(255, 248, 232, 0.92)";
+    ctx.strokeStyle = label.kind === "terrain" ? "rgba(248, 224, 177, 0.28)" : "rgba(89, 58, 28, 0.3)";
+    ctx.lineWidth = 1;
+    ctx.fillRect(x, top, width, labelHeight);
+    ctx.strokeRect(x, top, width, labelHeight);
+
+    ctx.fillStyle = label.kind === "terrain" ? "#fff8ec" : "#38291d";
+    ctx.fillText(label.text, center.x, y + 0.5);
+  });
+
+  ctx.restore();
+}
+
 export function createCustomPlacementLookup(project) {
   return {
     placementsById: new Map(project.customPlacements.map((placement) => [placement.id, placement])),
@@ -174,6 +229,7 @@ function drawHighlight(ctx, project, cell, size, fillStyle, strokeStyle) {
 function drawMap(ctx, options) {
   const { project, size, hoverCell, selectedCell, pendingEdgeCell, imageCache, builtinIconCache, mapConfig } = options;
   const placementLookup = createCustomPlacementLookup(project);
+  const cellLabels = [];
 
   project.cells.forEach((cell) => {
     drawTerrain(ctx, project, cell, size, mapConfig);
@@ -185,6 +241,10 @@ function drawMap(ctx, options) {
   project.cells.forEach((cell) => {
     drawGrid(ctx, project, cell, size, mapConfig);
     const center = getCellCenter(project, cell.col, cell.row, size);
+    const labels = listCellLabels(cell);
+    if (labels.length) {
+      cellLabels.push({ center, labels });
+    }
     cell.overlays.forEach((overlayId, index) => {
       const verticalOffset = mapConfig.layout === "square" ? index * 12 : index * 10;
       drawOverlayMarker(
@@ -197,6 +257,10 @@ function drawMap(ctx, options) {
       );
     });
     drawCustomPlacements(ctx, cell, size, imageCache, placementLookup, center);
+  });
+
+  cellLabels.forEach(({ center, labels }) => {
+    drawCellLabels(ctx, center, labels, size, mapConfig);
   });
 
   if (hoverCell) {

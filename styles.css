@@ -555,6 +555,22 @@ select {
   color: rgba(248, 224, 177, 0.86);
 }
 
+.tag-list {
+  display: grid;
+  gap: 10px;
+}
+
+.inspector-tag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .empty-state-grid {
   min-height: 52px;
   place-items: center;

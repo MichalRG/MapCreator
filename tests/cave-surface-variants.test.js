@@ -10,6 +10,13 @@ test("floor variants include wall border choices in the shared palette", () => {
   );
 });
 
+test("erase variants expose both void cut and wall border modes", () => {
+  assert.deepEqual(
+    getSurfaceVariantOptions("erase").map((entry) => entry.id),
+    ["void", "wall"]
+  );
+});
+
 test("resolveSurfaceBrushSelection maps floor wall variants back to wall strokes", () => {
   assert.deepEqual(resolveSurfaceBrushSelection("floor", "wall"), {
     tool: "wall",

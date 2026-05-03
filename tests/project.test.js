@@ -25,6 +25,7 @@ test("createProject builds a grid world project with metadata and empty cells", 
     terrainLabel: "",
     overlays: [],
     overlayLabels: {},
+    wallEdges: [],
     customPlacementIds: []
   });
   assert.equal(project.metadata.createdAt, project.metadata.updatedAt);
@@ -62,10 +63,12 @@ test("normalizeProject migrates version 1 projects to version 2", () => {
   assert.equal(normalized.cells[0].terrainLabel, "");
   assert.deepEqual(normalized.cells[0].overlays, []);
   assert.deepEqual(normalized.cells[0].overlayLabels, {});
+  assert.deepEqual(normalized.cells[0].wallEdges, []);
   assert.deepEqual(normalized.cells[0].customPlacementIds, []);
   assert.equal(normalized.cells[1].terrainLabel, "");
   assert.deepEqual(normalized.cells[1].overlays, ["village"]);
   assert.deepEqual(normalized.cells[1].overlayLabels, {});
+  assert.deepEqual(normalized.cells[1].wallEdges, []);
   assert.deepEqual(normalized.cells[1].customPlacementIds, ["a"]);
   assert.deepEqual(normalized.edgeFeatures, []);
   assert.deepEqual(normalized.customSymbols, []);
@@ -86,6 +89,15 @@ test("normalizeProject trims and preserves optional cell labels", () => {
   assert.deepEqual(normalized.cells[0].overlayLabels, {
     village: "Riverwatch"
   });
+});
+
+test("normalizeProject preserves valid cave wall edges and drops invalid entries", () => {
+  const project = createProject({ width: 1, height: 1, name: "Walls", mapType: "cave" });
+  project.cells[0].wallEdges = ["north", "east", "north", "bogus"];
+
+  const normalized = normalizeProject(project);
+
+  assert.deepEqual(normalized.cells[0].wallEdges, ["north", "east"]);
 });
 
 test("validateProjectShape accepts valid projects and rejects inconsistent cell counts", () => {

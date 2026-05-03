@@ -83,7 +83,8 @@ function createInitialSurfaceVariants() {
     wall: getDefaultSurfaceVariant("wall"),
     water: getDefaultSurfaceVariant("water"),
     lava: getDefaultSurfaceVariant("lava"),
-    chasm: getDefaultSurfaceVariant("chasm")
+    chasm: getDefaultSurfaceVariant("chasm"),
+    erase: getDefaultSurfaceVariant("erase")
   };
 }
 

@@ -1,4 +1,5 @@
 import { MAP_TYPE_ORDER, TOOL_DEFS, getMapTypeDef, getToolDef, listBuiltinAssetDefs } from "./constants.js";
+import { applyCaveWallClearMode, syncCaveWallEdgesForTerrainChange } from "./cave-grid-walls.js";
 import { areAdjacent, cellKey, edgeKey, getCell, getMapBounds, worldToCell } from "./hex.js";
 import {
   cloneProject,
@@ -73,6 +74,13 @@ function template() {
               <h2>Tools</h2>
             </div>
             <div data-role="tool-palette" class="tool-grid"></div>
+            <label data-role="clear-mode-field" class="field" hidden>
+              <span>Rubber mode</span>
+              <select data-role="clear-mode-select">
+                <option value="void">Void Cut</option>
+                <option value="wall">Wall Border</option>
+              </select>
+            </label>
           </section>
 
           <section class="panel">
@@ -209,6 +217,7 @@ export function mountGridEditor(container) {
     activeOverlay: Object.keys(initialConfig.overlayDefs)[0],
     activeEdgeType: Object.keys(initialConfig.edgeDefs)[0],
     activeCustomSymbolId: null,
+    clearMode: "void",
     selectedCellKey: null,
     hoverCellKey: null,
     pendingEdgeStart: null,
@@ -283,7 +292,9 @@ export function mountGridEditor(container) {
     terrainPalette: byRole(container, "terrain-palette"),
     overlayPalette: byRole(container, "overlay-palette"),
     edgePalette: byRole(container, "edge-palette"),
-    customSymbolPalette: byRole(container, "custom-symbol-palette")
+    customSymbolPalette: byRole(container, "custom-symbol-palette"),
+    clearModeField: byRole(container, "clear-mode-field"),
+    clearModeSelect: byRole(container, "clear-mode-select")
   };
 
   const canvasContext = elements.canvas.getContext("2d");
@@ -423,6 +434,13 @@ export function mountGridEditor(container) {
     elements.statusZoom.textContent = `Zoom: ${Math.round(state.viewport.scale * 100)}%`;
   }
 
+  function updateClearModeUi() {
+    const show = currentMapConfig().id === "cave" && state.selectedTool === "clear";
+    elements.clearModeField.hidden = !show;
+    elements.clearModeSelect.disabled = !show;
+    elements.clearModeSelect.value = state.clearMode;
+  }
+
   function preloadCustomSymbol(symbol) {
     if (!symbol || state.imageCache.has(symbol.id)) {
       return;
@@ -509,6 +527,7 @@ export function mountGridEditor(container) {
     });
 
     updateCustomSymbolPalette();
+    updateClearModeUi();
     updateStatusBar();
   }
 
@@ -522,9 +541,14 @@ export function mountGridEditor(container) {
     return card;
   }
 
-  function clearCell(col, row) {
+  function clearCell(col, row, { addWallBorders = false } = {}) {
     const config = currentMapConfig();
-    applyMutation(`Cleared ${config.cellNoun}.`, (project) => {
+    const message =
+      config.id === "cave" && addWallBorders
+        ? `Cleared ${config.cellNoun} and added wall borders.`
+        : `Cleared ${config.cellNoun}.`;
+
+    applyMutation(message, (project) => {
       const targetCell = getCell(project, col, row);
       if (!targetCell) {
         return;
@@ -543,6 +567,13 @@ export function mountGridEditor(container) {
           (feature.to.col === col && feature.to.row === row);
         return !touchesCell;
       });
+
+      if (config.id === "cave") {
+        applyCaveWallClearMode(project, col, row, {
+          defaultTerrain: config.defaultTerrain,
+          addWallBorders
+        });
+      }
     });
   }
 
@@ -730,8 +761,15 @@ export function mountGridEditor(container) {
     const clearButton = document.createElement("button");
     clearButton.type = "button";
     clearButton.className = "action-button dark-button";
-    clearButton.textContent = `Clear ${config.cellNoun[0].toUpperCase()}${config.cellNoun.slice(1)}`;
-    clearButton.addEventListener("click", () => clearCell(cell.col, cell.row));
+    clearButton.textContent =
+      config.id === "cave" && state.clearMode === "wall"
+        ? `Clear ${config.cellNoun[0].toUpperCase()}${config.cellNoun.slice(1)} With Wall Border`
+        : `Clear ${config.cellNoun[0].toUpperCase()}${config.cellNoun.slice(1)}`;
+    clearButton.addEventListener("click", () =>
+      clearCell(cell.col, cell.row, {
+        addWallBorders: config.id === "cave" && state.clearMode === "wall"
+      })
+    );
 
     const resetButton = document.createElement("button");
     resetButton.type = "button";
@@ -739,7 +777,15 @@ export function mountGridEditor(container) {
     resetButton.textContent = `Reset To ${config.terrainDefs[config.defaultTerrain].label}`;
     resetButton.addEventListener("click", () => {
       applyMutation(`Reset to ${config.terrainDefs[config.defaultTerrain].label}.`, (project) => {
-        getCell(project, cell.col, cell.row).terrain = config.defaultTerrain;
+        const targetCell = getCell(project, cell.col, cell.row);
+        if (!targetCell) {
+          return;
+        }
+
+        targetCell.terrain = config.defaultTerrain;
+        if (config.id === "cave") {
+          syncCaveWallEdgesForTerrainChange(project, cell.col, cell.row, config.defaultTerrain);
+        }
       });
     });
 
@@ -956,11 +1002,15 @@ export function mountGridEditor(container) {
   }
 
   function paintTerrain(col, row) {
+    const config = currentMapConfig();
     const targetCell = getCell(state.project, col, row);
     if (!targetCell || targetCell.terrain === state.activeTerrain) {
       return false;
     }
     targetCell.terrain = state.activeTerrain;
+    if (config.id === "cave") {
+      syncCaveWallEdgesForTerrainChange(state.project, col, row, config.defaultTerrain);
+    }
     return true;
   }
 
@@ -1087,7 +1137,9 @@ export function mountGridEditor(container) {
     }
 
     if (state.selectedTool === "clear") {
-      clearCell(col, row);
+      clearCell(col, row, {
+        addWallBorders: config.id === "cave" && state.clearMode === "wall"
+      });
       return;
     }
 
@@ -1539,6 +1591,11 @@ export function mountGridEditor(container) {
       state.project.metadata.name = elements.mapNameInput.value.trim() || "Untitled Map";
       touchProject(state.project);
       state.isDirty = true;
+      render();
+    });
+    elements.clearModeSelect.addEventListener("change", () => {
+      state.clearMode = elements.clearModeSelect.value === "wall" ? "wall" : "void";
+      setStatus(state.clearMode === "wall" ? "Rubber mode set to Wall Border." : "Rubber mode set to Void Cut.");
       render();
     });
 

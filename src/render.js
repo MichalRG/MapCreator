@@ -1,3 +1,4 @@
+import { normalizeWallEdges } from "./cave-grid-walls.js";
 import { getCellCenter, getCellPoints, getMapBounds } from "./hex.js";
 
 function pathCell(ctx, points) {
@@ -60,6 +61,61 @@ function drawGrid(ctx, project, cell, size, mapConfig) {
   ctx.lineWidth = 1;
   ctx.strokeStyle = mapConfig.layout === "square" ? "rgba(242, 233, 223, 0.12)" : "rgba(42, 33, 25, 0.22)";
   ctx.stroke();
+}
+
+function drawCaveWallEdges(ctx, cell, size, mapConfig) {
+  if (mapConfig.layout !== "square" || cell.terrain === mapConfig.defaultTerrain) {
+    return;
+  }
+
+  const wallEdges = normalizeWallEdges(cell.wallEdges);
+  if (!wallEdges.length) {
+    return;
+  }
+
+  const x = cell.col * size;
+  const y = cell.row * size;
+  const inset = Math.max(4, size * 0.12);
+  const accentInset = inset + Math.max(1.5, size * 0.05);
+  const segments = {
+    north: { x1: x + inset, y1: y + inset, x2: x + size - inset, y2: y + inset },
+    east: { x1: x + size - inset, y1: y + inset, x2: x + size - inset, y2: y + size - inset },
+    south: { x1: x + size - inset, y1: y + size - inset, x2: x + inset, y2: y + size - inset },
+    west: { x1: x + inset, y1: y + size - inset, x2: x + inset, y2: y + inset }
+  };
+  const accents = {
+    north: { x1: x + accentInset, y1: y + accentInset, x2: x + size - accentInset, y2: y + accentInset },
+    east: { x1: x + size - accentInset, y1: y + accentInset, x2: x + size - accentInset, y2: y + size - accentInset },
+    south: { x1: x + size - accentInset, y1: y + size - accentInset, x2: x + accentInset, y2: y + size - accentInset },
+    west: { x1: x + accentInset, y1: y + size - accentInset, x2: x + accentInset, y2: y + accentInset }
+  };
+
+  ctx.save();
+  ctx.lineCap = "round";
+
+  wallEdges.forEach((direction) => {
+    const segment = segments[direction];
+    const accent = accents[direction];
+    if (!segment || !accent) {
+      return;
+    }
+
+    ctx.strokeStyle = "rgba(18, 15, 13, 0.96)";
+    ctx.lineWidth = Math.max(4, size * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(segment.x1, segment.y1);
+    ctx.lineTo(segment.x2, segment.y2);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(205, 182, 146, 0.38)";
+    ctx.lineWidth = Math.max(1.4, size * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(accent.x1, accent.y1);
+    ctx.lineTo(accent.x2, accent.y2);
+    ctx.stroke();
+  });
+
+  ctx.restore();
 }
 
 function drawOverlayMarker(ctx, overlayId, center, size, mapConfig, builtinIconCache) {
@@ -240,6 +296,7 @@ function drawMap(ctx, options) {
 
   project.cells.forEach((cell) => {
     drawGrid(ctx, project, cell, size, mapConfig);
+    drawCaveWallEdges(ctx, cell, size, mapConfig);
     const center = getCellCenter(project, cell.col, cell.row, size);
     const labels = listCellLabels(cell);
     if (labels.length) {

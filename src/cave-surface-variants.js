@@ -22,6 +22,10 @@ export const SURFACE_VARIANT_DEFS = Object.freeze({
   chasm: Object.freeze([
     Object.freeze({ id: "normal", label: "Normal" }),
     Object.freeze({ id: "rift", label: "Broken Rift" })
+  ]),
+  erase: Object.freeze([
+    Object.freeze({ id: "void", label: "Void Cut" }),
+    Object.freeze({ id: "wall", label: "Wall Border" })
   ])
 });
 

@@ -20,6 +20,7 @@ export function buildEmptyCells(width, height, defaultTerrain = "plains") {
         terrainLabel: "",
         overlays: [],
         overlayLabels: {},
+        wallEdges: [],
         customPlacementIds: []
       });
     }

@@ -170,7 +170,7 @@ export const MAP_TYPE_DEFS = {
       "Terrain tool paints cave floor, rock, water, lava, or crystal areas.",
       "Feature tool toggles cave elements like entrances, treasure, nests, or altars.",
       "Custom tool lets you place imported cave symbols.",
-      "Clear tool resets a tile and removes connected cave links.",
+      "Clear tool can either cut to void or leave a wall border on neighboring floor tiles.",
       "Connection tool toggles tunnels, streams, or chasms between neighboring tiles."
     ],
     canvasTips: [

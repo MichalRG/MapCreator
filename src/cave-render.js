@@ -93,6 +93,10 @@ function isCrackedFloorVariant(variant) {
   return variant === "cracked";
 }
 
+function isWallBorderEraseVariant(variant) {
+  return variant === "wall";
+}
+
 function strokeRenderFamily(stroke) {
   const variant = getStrokeSurfaceVariant(stroke);
 
@@ -1053,6 +1057,35 @@ function getInteriorFloorMaskLineWidth(stroke) {
   return Math.max(6, stroke.size * 0.78);
 }
 
+function buildFloorMask(width, height, strokes, resolveFloorLineWidth, shouldApplyErase = () => true) {
+  const floorMaskSurface = createOffscreenSurface(width, height);
+  if (!floorMaskSurface) {
+    return null;
+  }
+
+  orderPaintStrokesForRendering(strokes).forEach((stroke) => {
+    switch (stroke.tool) {
+      case "floor":
+        drawMaskStrokeWithWidth(floorMaskSurface.ctx, stroke, "source-over", resolveFloorLineWidth(stroke));
+        break;
+      case "erase":
+        if (shouldApplyErase(stroke)) {
+          drawMaskStroke(floorMaskSurface.ctx, stroke, "destination-out");
+        }
+        break;
+      case "water":
+      case "lava":
+      case "chasm":
+        drawMaskStroke(floorMaskSurface.ctx, stroke, "destination-out");
+        break;
+      default:
+        break;
+    }
+  });
+
+  return floorMaskSurface;
+}
+
 function orderPaintSegment(strokes) {
   const background = [];
   const surfaces = [];
@@ -1189,42 +1222,117 @@ function renderMaskedPaintGroups(ctx, groups, clipMaskSurface = null) {
 }
 
 function buildVisibleFloorMask(width, height, strokes) {
-  const floorMaskSurface = createOffscreenSurface(width, height);
-  if (!floorMaskSurface) {
-    return null;
-  }
-
-  orderPaintStrokesForRendering(strokes).forEach((stroke) => {
-    switch (stroke.tool) {
-      case "floor":
-        drawMaskStrokeWithWidth(
-          floorMaskSurface.ctx,
-          stroke,
-          "source-over",
-          getInteriorFloorMaskLineWidth(stroke)
-        );
-        break;
-      case "erase":
-      case "water":
-      case "lava":
-      case "chasm":
-        drawMaskStroke(floorMaskSurface.ctx, stroke, "destination-out");
-        break;
-      default:
-        break;
-    }
-  });
-
-  return floorMaskSurface;
+  return buildFloorMask(width, height, strokes, getInteriorFloorMaskLineWidth);
 }
 
 function buildFloorDetailMaskPlan(strokes) {
   return buildPaintMaskPlan(strokes.filter((stroke) => stroke.tool === "floor-detail" || stroke.tool === "erase"));
 }
 
+function buildWallBorderEraseAreaMask(width, height, strokes) {
+  const visibleFloorWithoutWallBorderErase = buildFloorMask(
+    width,
+    height,
+    strokes,
+    getInteriorFloorMaskLineWidth,
+    (stroke) => !isWallBorderEraseVariant(getStrokeSurfaceVariant(stroke))
+  );
+  const visibleFloorMask = buildVisibleFloorMask(width, height, strokes);
+  if (!visibleFloorWithoutWallBorderErase || !visibleFloorMask) {
+    return null;
+  }
+
+  const maskSurface = createOffscreenSurface(width, height);
+  if (!maskSurface) {
+    return null;
+  }
+
+  maskSurface.ctx.drawImage(visibleFloorWithoutWallBorderErase.canvas, 0, 0);
+  maskSurface.ctx.save();
+  maskSurface.ctx.globalCompositeOperation = "destination-out";
+  maskSurface.ctx.drawImage(visibleFloorMask.canvas, 0, 0);
+  maskSurface.ctx.restore();
+  return maskSurface;
+}
+
+function expandMaskSurface(maskSurface, radius) {
+  if (!maskSurface) {
+    return null;
+  }
+
+  const expandedSurface = createOffscreenSurface(maskSurface.canvas.width, maskSurface.canvas.height);
+  if (!expandedSurface) {
+    return null;
+  }
+
+  const roundedRadius = Math.max(1, Math.round(radius));
+  const step = Math.max(1, Math.round(roundedRadius / 2));
+
+  for (let y = -roundedRadius; y <= roundedRadius; y += step) {
+    for (let x = -roundedRadius; x <= roundedRadius; x += step) {
+      if (x * x + y * y > roundedRadius * roundedRadius) {
+        continue;
+      }
+      expandedSurface.ctx.drawImage(maskSurface.canvas, x, y);
+    }
+  }
+
+  return expandedSurface;
+}
+
+function renderWallBorderEraseRims(ctx, strokes) {
+  const wallBorderEraseStrokes = strokes.filter(
+    (stroke) => stroke.tool === "erase" && isWallBorderEraseVariant(getStrokeSurfaceVariant(stroke))
+  );
+  if (!wallBorderEraseStrokes.length || !strokes.some((stroke) => stroke.tool === "floor")) {
+    return;
+  }
+
+  const visibleFloorMask = buildVisibleFloorMask(ctx.canvas.width, ctx.canvas.height, strokes);
+  const erasedAreaMaskSurface = buildWallBorderEraseAreaMask(ctx.canvas.width, ctx.canvas.height, strokes);
+  const expandedErasedAreaMaskSurface = expandMaskSurface(
+    erasedAreaMaskSurface,
+    Math.max(8, ...wallBorderEraseStrokes.map((stroke) => stroke.size * 0.24))
+  );
+  if (!visibleFloorMask || !expandedErasedAreaMaskSurface) {
+    return;
+  }
+
+  const rimSurface = createOffscreenSurface(ctx.canvas.width, ctx.canvas.height);
+  if (!rimSurface) {
+    return;
+  }
+
+  const { canvas, ctx: rimCtx } = rimSurface;
+  rimCtx.fillStyle = "#8b745d";
+  rimCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+  rimCtx.save();
+  rimCtx.globalAlpha = 0.22;
+  rimCtx.fillStyle = "#4c3a2d";
+  rimCtx.fillRect(0, 0, canvas.width, canvas.height);
+  rimCtx.restore();
+
+  rimCtx.save();
+  rimCtx.globalAlpha = 0.1;
+  rimCtx.fillStyle = "#d9c5a2";
+  rimCtx.fillRect(0, 0, canvas.width, canvas.height);
+  rimCtx.restore();
+
+  rimCtx.save();
+  rimCtx.globalCompositeOperation = "destination-in";
+  rimCtx.drawImage(expandedErasedAreaMaskSurface.canvas, 0, 0);
+  rimCtx.drawImage(visibleFloorMask.canvas, 0, 0);
+  rimCtx.restore();
+
+  ctx.drawImage(canvas, 0, 0);
+}
+
 function renderPaintSequence(ctx, strokes) {
   const baseGroups = buildPaintMaskPlan(strokes.filter((stroke) => stroke.tool !== "floor-detail"));
   renderMaskedPaintGroups(ctx, baseGroups);
+
+  renderWallBorderEraseRims(ctx, strokes.filter((stroke) => stroke.tool !== "floor-detail"));
 
   const floorDetailGroups = buildFloorDetailMaskPlan(strokes);
   if (!floorDetailGroups.length) {
@@ -1539,6 +1647,16 @@ function drawPaintPreview(ctx, hoverPoint, brushSize, tool, surfaceVariant = "no
         ctx.moveTo(hoverPoint.x, hoverPoint.y - brushSize * 0.13);
         ctx.lineTo(hoverPoint.x, hoverPoint.y + brushSize * 0.13);
         ctx.stroke();
+        break;
+      case "erase":
+        if (surfaceVariant === "wall") {
+          ctx.strokeStyle = "rgba(214, 194, 166, 0.72)";
+          ctx.lineWidth = Math.max(2, brushSize * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(hoverPoint.x - brushSize * 0.14, hoverPoint.y);
+          ctx.lineTo(hoverPoint.x + brushSize * 0.14, hoverPoint.y);
+          ctx.stroke();
+        }
         break;
       default:
         break;

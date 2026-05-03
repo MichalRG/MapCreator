@@ -1,3 +1,4 @@
+import { normalizeWallEdges } from "./cave-grid-walls.js";
 import { getMapTypeDef } from "./constants.js";
 import { buildEmptyCells } from "./hex.js";
 
@@ -51,6 +52,7 @@ function normalizeCells(cells) {
     terrainLabel: normalizeLabel(cell.terrainLabel),
     overlays: Array.isArray(cell.overlays) ? [...cell.overlays] : [],
     overlayLabels: normalizeOverlayLabels(cell.overlayLabels),
+    wallEdges: normalizeWallEdges(cell.wallEdges),
     customPlacementIds: Array.isArray(cell.customPlacementIds) ? [...cell.customPlacementIds] : []
   }));
 }

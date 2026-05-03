@@ -159,6 +159,14 @@ test("normalizeProject preserves supported surface variants and normalizes unkno
             size: 50,
             opacity: 0.92,
             points: [{ x: 260, y: 320 }]
+          },
+          {
+            id: "erase-wall",
+            tool: "erase",
+            surfaceVariant: "wall",
+            size: 42,
+            opacity: 1,
+            points: [{ x: 300, y: 350 }]
           }
         ]
       }
@@ -175,6 +183,7 @@ test("normalizeProject preserves supported surface variants and normalizes unkno
   assert.equal(normalized.paintLayers[0].strokes[3].surfaceVariant, "pool");
   assert.equal(normalized.paintLayers[0].strokes[4].surfaceVariant, "molten");
   assert.equal(normalized.paintLayers[0].strokes[5].surfaceVariant, "rift");
+  assert.equal(normalized.paintLayers[0].strokes[6].surfaceVariant, "wall");
 });
 
 test("normalizeProject preserves square brush strokes and defaults invalid brush shapes to circle", () => {

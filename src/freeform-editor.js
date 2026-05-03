@@ -40,6 +40,7 @@ const PAGE_PRESETS = [
 
 const TOOL_DEFS = [
   { id: "floor", label: "Floor", description: "Carve chambers, tunnels, and walkable passages." },
+  { id: "floor-detail", label: "Floor Detail", description: "Scatter small rocks and grit across existing floor." },
   { id: "wall", label: "Parent Rock", description: "Paint the cave background mass so floor, water, lava, and chasms can sit on top of it." },
   { id: "water", label: "Water", description: "Paint underground pools and streams." },
   { id: "lava", label: "Lava", description: "Add glowing magma cuts and vents." },
@@ -51,7 +52,7 @@ const TOOL_DEFS = [
   { id: "pan", label: "Pan", description: "Drag the workspace without editing." }
 ];
 
-const SURFACE_BRUSH_TOOLS = new Set(["floor", "wall", "water", "lava", "chasm", "erase"]);
+const SURFACE_BRUSH_TOOLS = new Set(["floor", "floor-detail", "wall", "water", "lava", "chasm", "erase"]);
 const DEFAULT_BUILTIN_ASSET = listBuiltinAssetsByCategory("detail")[0] || BUILTIN_ASSETS[0];
 const WALL_ROTATION_STEP = (3 * Math.PI) / 180;
 const FULL_ROTATION = Math.PI * 2;
@@ -809,6 +810,7 @@ export function mountFreeformEditor(container) {
   function rebuildUsageList() {
     const tips = [
       "Use each brush variant to shift the material feel: Floor includes Raised, Lowered, Cracked Stone, and Parent Rock options, while Parent Rock, Water, Lava, and Chasm each include a more textured realistic option.",
+      "Floor Detail scatters decorative pebbles and grit, and it only shows where floor remains visible on that layer.",
       "Brush Shape switches between the current circular footprint and a square footprint for blockier drafting.",
       "Switch paint layers when one surface needs to sit cleanly above another. Layer 5 always renders above Layer 1.",
       "Hold Shift and click with a paint brush to draw a straight segment from the previous brush endpoint. Add Ctrl to lock it to 45-degree angles.",
@@ -933,6 +935,7 @@ export function mountFreeformEditor(container) {
         ["Active layer strokes", activeLayerStrokes.length],
         ["Active layer details", state.project.stamps.filter((stamp) => stamp.layerId === activePaintLayer()?.id).length],
         ["Floor strokes", allStrokes.filter((stroke) => stroke.tool === "floor").length],
+        ["Floor detail strokes", allStrokes.filter((stroke) => stroke.tool === "floor-detail").length],
         ["Parent rock strokes", allStrokes.filter((stroke) => stroke.tool === "wall").length],
         ["Water strokes", allStrokes.filter((stroke) => stroke.tool === "water").length],
         ["Lava strokes", allStrokes.filter((stroke) => stroke.tool === "lava").length],

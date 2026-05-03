@@ -15,6 +15,44 @@ function clampAlpha(value) {
   return Math.max(0, Math.min(1, value));
 }
 
+function hashSeedPart(seed, value) {
+  const text = String(value);
+  let nextSeed = seed >>> 0;
+
+  for (let index = 0; index < text.length; index += 1) {
+    nextSeed ^= text.charCodeAt(index);
+    nextSeed = Math.imul(nextSeed, 16777619);
+  }
+
+  return nextSeed >>> 0;
+}
+
+function hashStrokeSeed(stroke) {
+  let seed = 2166136261;
+  seed = hashSeedPart(seed, stroke.id || "");
+  seed = hashSeedPart(seed, stroke.tool || "");
+  seed = hashSeedPart(seed, stroke.size || 0);
+  seed = hashSeedPart(seed, stroke.opacity || 0);
+  seed = hashSeedPart(seed, stroke.brushShape || "circle");
+
+  (stroke.points || []).forEach((point) => {
+    seed = hashSeedPart(seed, Math.round(Number(point?.x || 0) * 10));
+    seed = hashSeedPart(seed, Math.round(Number(point?.y || 0) * 10));
+  });
+
+  return seed >>> 0;
+}
+
+function createSeededRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let result = Math.imul(state ^ (state >>> 15), 1 | state);
+    result ^= result + Math.imul(result ^ (result >>> 7), 61 | result);
+    return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function appendStrokePath(ctx, points, size) {
   if (!points.length) {
     return false;
@@ -57,6 +95,10 @@ function isCrackedFloorVariant(variant) {
 
 function strokeRenderFamily(stroke) {
   const variant = getStrokeSurfaceVariant(stroke);
+
+  if (stroke.tool === "floor-detail") {
+    return "floor-detail";
+  }
 
   if (floorFamilyTool(stroke.tool)) {
     return isCrackedFloorVariant(variant) ? "floor-cracked" : "floor-family";
@@ -724,8 +766,102 @@ function drawFloorVariantMarkers(ctx, stroke) {
   ctx.restore();
 }
 
+function randomOffsetWithinBrush(random, brushShape, radius) {
+  if (getBrushShape(brushShape) === "square") {
+    return {
+      x: (random() * 2 - 1) * radius,
+      y: (random() * 2 - 1) * radius
+    };
+  }
+
+  const angle = random() * Math.PI * 2;
+  const distance = Math.sqrt(random()) * radius;
+  return {
+    x: Math.cos(angle) * distance,
+    y: Math.sin(angle) * distance
+  };
+}
+
+function drawFloorDetailPebble(ctx, x, y, radiusX, radiusY, rotation) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.fillStyle = "rgba(66, 54, 45, 0.7)";
+  ctx.strokeStyle = "rgba(218, 198, 168, 0.18)";
+  ctx.lineWidth = Math.max(0.8, Math.min(radiusX, radiusY) * 0.28);
+  ctx.shadowBlur = Math.max(radiusX, radiusY) * 1.2;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.18)";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, radiusX, radiusY, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFloorDetailScratch(ctx, x, y, length, rotation) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+  ctx.strokeStyle = "rgba(86, 69, 58, 0.36)";
+  ctx.lineWidth = Math.max(0.9, length * 0.18);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-length / 2, 0);
+  ctx.lineTo(length / 2, 0);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFloorDetailStroke(ctx, stroke) {
+  const random = createSeededRandom(hashStrokeSeed(stroke));
+  const clusterSpacing = Math.max(14, stroke.size * 0.24);
+  const clusterRadius = stroke.size * 0.34;
+  const minPebbles = Math.max(2, Math.round(stroke.size / 36));
+  const maxPebbles = Math.max(minPebbles + 1, Math.round(stroke.size / 20));
+
+  ctx.save();
+  ctx.globalAlpha = clampAlpha(stroke.opacity);
+
+  walkStrokeMarkers(stroke.points, clusterSpacing, (markerPoint) => {
+    const pebbleCount = minPebbles + Math.floor(random() * (maxPebbles - minPebbles + 1));
+
+    for (let index = 0; index < pebbleCount; index += 1) {
+      const offset = randomOffsetWithinBrush(random, stroke.brushShape, clusterRadius);
+      const baseRadius = Math.max(1.4, stroke.size * (0.018 + random() * 0.045));
+      drawFloorDetailPebble(
+        ctx,
+        markerPoint.x + offset.x,
+        markerPoint.y + offset.y,
+        baseRadius * (0.9 + random() * 0.7),
+        baseRadius * (0.6 + random() * 0.45),
+        random() * Math.PI * 2
+      );
+    }
+
+    if (random() < 0.65) {
+      const scratchCount = 1 + Math.floor(random() * Math.max(1, stroke.size / 110));
+      for (let index = 0; index < scratchCount; index += 1) {
+        const offset = randomOffsetWithinBrush(random, stroke.brushShape, clusterRadius * 0.92);
+        drawFloorDetailScratch(
+          ctx,
+          markerPoint.x + offset.x,
+          markerPoint.y + offset.y,
+          Math.max(4, stroke.size * (0.05 + random() * 0.08)),
+          random() * Math.PI * 2
+        );
+      }
+    }
+  });
+
+  ctx.restore();
+}
+
 function drawFloorStroke(ctx, stroke) {
   drawLayeredStroke(ctx, stroke.opacity, getFloorLayers(stroke), singleStrokePathBuilder(ctx, stroke), stroke.brushShape);
+}
+
+function drawGroupedFloorDetail(ctx, strokes) {
+  strokes.forEach((stroke) => drawFloorDetailStroke(ctx, stroke));
 }
 
 function drawWallStroke(ctx, stroke) {
@@ -750,7 +886,7 @@ function drawEraseStroke(ctx, stroke) {
   ctx.globalAlpha = 1;
   applyBrushShapeToContext(ctx, stroke.brushShape);
   ctx.strokeStyle = "rgba(0, 0, 0, 1)";
-  ctx.lineWidth = stroke.size * 1.02;
+  ctx.lineWidth = getRenderedEraseLineWidth(stroke);
   if (buildStrokePath(ctx, stroke.points, stroke.size)) {
     ctx.stroke();
   }
@@ -762,6 +898,9 @@ function drawStroke(ctx, stroke) {
     case "floor":
       drawFloorStroke(ctx, stroke);
       drawFloorVariantMarkers(ctx, stroke);
+      break;
+    case "floor-detail":
+      drawFloorDetailStroke(ctx, stroke);
       break;
     case "wall":
       drawWallStroke(ctx, stroke);
@@ -844,6 +983,9 @@ function drawMergedPaint(ctx, strokes) {
       case "floor-cracked":
         drawGroupedFloor(ctx, group);
         break;
+      case "floor-detail":
+        drawGroupedFloorDetail(ctx, group);
+        break;
       case "wall":
       case "wall-jagged":
         drawGroupedWall(ctx, group);
@@ -878,21 +1020,37 @@ function createOffscreenSurface(width, height) {
   return ctx ? { canvas, ctx } : null;
 }
 
-function getMaskLineWidth(stroke) {
+function getRenderedEraseLineWidth(stroke) {
+  return stroke.size * 1.02;
+}
+
+export function getStrokeMaskLineWidth(stroke) {
+  if (stroke?.tool === "erase") {
+    return getRenderedEraseLineWidth(stroke);
+  }
+
   return stroke.size * 1.6;
 }
 
-function drawMaskStroke(ctx, stroke, compositeOperation) {
+function drawMaskStrokeWithWidth(ctx, stroke, compositeOperation, lineWidth) {
   ctx.save();
   ctx.globalCompositeOperation = compositeOperation;
   ctx.globalAlpha = 1;
   applyBrushShapeToContext(ctx, stroke.brushShape);
   ctx.strokeStyle = "rgba(255, 255, 255, 1)";
-  ctx.lineWidth = getMaskLineWidth(stroke);
+  ctx.lineWidth = lineWidth;
   if (buildStrokePath(ctx, stroke.points, stroke.size)) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+function drawMaskStroke(ctx, stroke, compositeOperation) {
+  drawMaskStrokeWithWidth(ctx, stroke, compositeOperation, getStrokeMaskLineWidth(stroke));
+}
+
+function getInteriorFloorMaskLineWidth(stroke) {
+  return Math.max(6, stroke.size * 0.78);
 }
 
 function orderPaintSegment(strokes) {
@@ -990,9 +1148,7 @@ export function buildPaintMaskPlan(strokes) {
   return Array.from(groups.values()).sort(sortPaintGroups);
 }
 
-function renderPaintSequence(ctx, strokes) {
-  const groups = buildPaintMaskPlan(strokes);
-
+function renderMaskedPaintGroups(ctx, groups, clipMaskSurface = null) {
   if (!groups.length) {
     return;
   }
@@ -1023,10 +1179,64 @@ function renderPaintSequence(ctx, strokes) {
     paintSurface.ctx.save();
     paintSurface.ctx.globalCompositeOperation = "destination-in";
     paintSurface.ctx.drawImage(mask.canvas, 0, 0);
+    if (clipMaskSurface) {
+      paintSurface.ctx.drawImage(clipMaskSurface.canvas, 0, 0);
+    }
     paintSurface.ctx.restore();
 
     ctx.drawImage(paintSurface.canvas, 0, 0);
   });
+}
+
+function buildVisibleFloorMask(width, height, strokes) {
+  const floorMaskSurface = createOffscreenSurface(width, height);
+  if (!floorMaskSurface) {
+    return null;
+  }
+
+  orderPaintStrokesForRendering(strokes).forEach((stroke) => {
+    switch (stroke.tool) {
+      case "floor":
+        drawMaskStrokeWithWidth(
+          floorMaskSurface.ctx,
+          stroke,
+          "source-over",
+          getInteriorFloorMaskLineWidth(stroke)
+        );
+        break;
+      case "erase":
+      case "water":
+      case "lava":
+      case "chasm":
+        drawMaskStroke(floorMaskSurface.ctx, stroke, "destination-out");
+        break;
+      default:
+        break;
+    }
+  });
+
+  return floorMaskSurface;
+}
+
+function buildFloorDetailMaskPlan(strokes) {
+  return buildPaintMaskPlan(strokes.filter((stroke) => stroke.tool === "floor-detail" || stroke.tool === "erase"));
+}
+
+function renderPaintSequence(ctx, strokes) {
+  const baseGroups = buildPaintMaskPlan(strokes.filter((stroke) => stroke.tool !== "floor-detail"));
+  renderMaskedPaintGroups(ctx, baseGroups);
+
+  const floorDetailGroups = buildFloorDetailMaskPlan(strokes);
+  if (!floorDetailGroups.length) {
+    return;
+  }
+
+  const visibleFloorMask = buildVisibleFloorMask(ctx.canvas.width, ctx.canvas.height, strokes.filter((stroke) => stroke.tool !== "floor-detail"));
+  if (!visibleFloorMask) {
+    return;
+  }
+
+  renderMaskedPaintGroups(ctx, floorDetailGroups, visibleFloorMask);
 }
 
 function resolveLayerSurface(project, layerSurface = null) {
@@ -1249,6 +1459,7 @@ function drawPaintPreview(ctx, hoverPoint, brushSize, tool, surfaceVariant = "no
 
   const palette = {
     floor: "rgba(219, 191, 147, 0.62)",
+    "floor-detail": "rgba(214, 181, 132, 0.7)",
     wall: "rgba(149, 131, 111, 0.5)",
     water: "rgba(113, 192, 238, 0.58)",
     lava: "rgba(255, 148, 72, 0.6)",
@@ -1266,6 +1477,21 @@ function drawPaintPreview(ctx, hoverPoint, brushSize, tool, surfaceVariant = "no
     ctx.beginPath();
     ctx.arc(hoverPoint.x, hoverPoint.y, brushSize / 2, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  if (tool === "floor-detail") {
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(92, 72, 58, 0.72)";
+    [
+      [-0.18, -0.06, 0.055],
+      [0.02, 0.09, 0.04],
+      [0.16, -0.11, 0.048],
+      [0.09, 0.18, 0.034]
+    ].forEach(([xScale, yScale, radiusScale]) => {
+      ctx.beginPath();
+      ctx.arc(hoverPoint.x + brushSize * xScale, hoverPoint.y + brushSize * yScale, Math.max(1.5, brushSize * radiusScale), 0, Math.PI * 2);
+      ctx.fill();
+    });
   }
 
   if (surfaceVariant !== "normal" && surfaceVariant !== "up" && surfaceVariant !== "down") {
@@ -1353,6 +1579,7 @@ function drawLinePreview(ctx, preview) {
 
   const palette = {
     floor: "rgba(244, 211, 162, 0.78)",
+    "floor-detail": "rgba(224, 196, 150, 0.82)",
     wall: "rgba(170, 152, 133, 0.74)",
     water: "rgba(132, 210, 255, 0.78)",
     lava: "rgba(255, 161, 98, 0.82)",
@@ -1424,7 +1651,7 @@ function drawProject(ctx, options) {
   drawLayerStack(ctx, project, imageCache, selectedStampId, layerSurface);
 
   if (pointInPage(project, hoverPoint)) {
-    if (["floor", "wall", "water", "lava", "chasm", "erase"].includes(selectedTool)) {
+    if (["floor", "floor-detail", "wall", "water", "lava", "chasm", "erase"].includes(selectedTool)) {
       drawPaintPreview(ctx, hoverPoint, brushSize, selectedTool, surfaceVariant, brushShape);
       if (selectedTool === "floor" && (surfaceVariant === "up" || surfaceVariant === "down")) {
         drawFloorVariantMarkers(

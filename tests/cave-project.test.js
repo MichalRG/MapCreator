@@ -224,6 +224,55 @@ test("normalizeProject preserves square brush strokes and defaults invalid brush
   assert.equal(normalized.paintLayers[0].strokes[1].brushShape, "circle");
 });
 
+test("normalizeProject preserves floor detail strokes as paint-layer content", () => {
+  const normalized = normalizeProject({
+    version: 5,
+    kind: "cave-draft",
+    metadata: {
+      name: "Floor Detail Test",
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-02T00:00:00.000Z",
+      width: 1600,
+      height: 1000,
+      gridSize: 64,
+      showGrid: true,
+      snapToGrid: false
+    },
+    paintLayers: [
+      {
+        id: "layer-1",
+        name: "Layer 1",
+        visible: true,
+        strokes: [
+          {
+            id: "detail-stroke",
+            tool: "floor-detail",
+            brushShape: "square",
+            size: 52,
+            opacity: 0.64,
+            mergeTouches: false,
+            points: [{ x: 45, y: 65 }]
+          }
+        ]
+      }
+    ],
+    stamps: [],
+    customAssets: []
+  });
+
+  assert.deepEqual(normalized.paintLayers[0].strokes[0], {
+    id: "detail-stroke",
+    tool: "floor-detail",
+    surfaceVariant: "normal",
+    floorVariant: "normal",
+    brushShape: "square",
+    size: 52,
+    opacity: 0.64,
+    mergeTouches: false,
+    points: [{ x: 45, y: 65 }]
+  });
+});
+
 test("normalizeProject rejects older grid cave files", () => {
   assert.throws(
     () =>

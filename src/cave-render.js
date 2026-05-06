@@ -1036,6 +1036,14 @@ export function getStrokeMaskLineWidth(stroke) {
   return stroke.size * 1.6;
 }
 
+export function getRejoinedStrokeMaskLineWidth(stroke) {
+  return Math.max(1, stroke.size * 0.9);
+}
+
+export function getVisibleOverlayMaskLineWidth(stroke) {
+  return stroke.size;
+}
+
 function drawMaskStrokeWithWidth(ctx, stroke, compositeOperation, lineWidth) {
   ctx.save();
   ctx.globalCompositeOperation = compositeOperation;
@@ -1076,7 +1084,7 @@ function buildFloorMask(width, height, strokes, resolveFloorLineWidth, shouldApp
       case "water":
       case "lava":
       case "chasm":
-        drawMaskStroke(floorMaskSurface.ctx, stroke, "destination-out");
+        drawMaskStrokeWithWidth(floorMaskSurface.ctx, stroke, "destination-out", getVisibleOverlayMaskLineWidth(stroke));
         break;
       default:
         break;
@@ -1142,9 +1150,144 @@ function sortPaintGroups(left, right) {
   return left.order - right.order;
 }
 
+function distanceBetweenPoints(first, second) {
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function distanceToSegment(point, start, end) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+
+  if (!lengthSquared) {
+    return distanceBetweenPoints(point, start);
+  }
+
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared));
+  return distanceBetweenPoints(point, {
+    x: start.x + dx * t,
+    y: start.y + dy * t
+  });
+}
+
+function distanceToStrokePath(point, stroke) {
+  const points = stroke.points || [];
+  if (!points.length) {
+    return Infinity;
+  }
+
+  if (points.length === 1) {
+    return distanceBetweenPoints(point, points[0]);
+  }
+
+  let closest = Infinity;
+  for (let index = 1; index < points.length; index += 1) {
+    closest = Math.min(closest, distanceToSegment(point, points[index - 1], points[index]));
+  }
+  return closest;
+}
+
+function getVisibleStrokeRadius(stroke) {
+  return Math.max(1, stroke.size * 0.53);
+}
+
+function isPointInStroke(point, stroke, radius = getVisibleStrokeRadius(stroke)) {
+  return distanceToStrokePath(point, stroke) <= radius;
+}
+
+function sampleStrokeCenterline(stroke) {
+  const points = stroke.points || [];
+  if (points.length <= 1) {
+    return points.slice();
+  }
+
+  const spacing = Math.max(8, stroke.size / 4);
+  const samples = [points[0]];
+
+  for (let index = 1; index < points.length; index += 1) {
+    const start = points[index - 1];
+    const end = points[index];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy);
+    const steps = Math.max(1, Math.ceil(length / spacing));
+
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / steps;
+      samples.push({
+        x: start.x + dx * t,
+        y: start.y + dy * t
+      });
+    }
+  }
+
+  return samples;
+}
+
+function sampleStrokeCoverage(stroke) {
+  const radius = getVisibleStrokeRadius(stroke);
+  const edgeRadius = radius * 0.82;
+  const offsets =
+    getBrushShape(stroke.brushShape) === "square"
+      ? [
+          [0, 0],
+          [edgeRadius, 0],
+          [-edgeRadius, 0],
+          [0, edgeRadius],
+          [0, -edgeRadius],
+          [edgeRadius, edgeRadius],
+          [edgeRadius, -edgeRadius],
+          [-edgeRadius, edgeRadius],
+          [-edgeRadius, -edgeRadius]
+        ]
+      : [
+          [0, 0],
+          [edgeRadius, 0],
+          [-edgeRadius, 0],
+          [0, edgeRadius],
+          [0, -edgeRadius],
+          [edgeRadius * 0.7, edgeRadius * 0.7],
+          [edgeRadius * 0.7, -edgeRadius * 0.7],
+          [-edgeRadius * 0.7, edgeRadius * 0.7],
+          [-edgeRadius * 0.7, -edgeRadius * 0.7]
+        ];
+
+  return sampleStrokeCenterline(stroke).flatMap((point) =>
+    offsets.map(([x, y]) => ({
+      x: point.x + x,
+      y: point.y + y
+    }))
+  );
+}
+
+function isPointErased(point, eraseStrokes) {
+  return eraseStrokes.some((stroke) => isPointInStroke(point, stroke, getRenderedEraseLineWidth(stroke) / 2));
+}
+
+function strokeTouchesVisibleGroup(stroke, group) {
+  const eraseStrokes = group.maskSteps.filter((step) => step.type === "erase").map((step) => step.stroke);
+
+  return group.strokes.some((groupStroke) =>
+    sampleStrokeCoverage(groupStroke).some((point) => !isPointErased(point, eraseStrokes) && isPointInStroke(point, stroke))
+  );
+}
+
+function findVisibleTouchingGroup(groups, baseKey, stroke) {
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    const group = groups[index];
+    if (group.baseKey === baseKey && strokeTouchesVisibleGroup(stroke, group)) {
+      return group;
+    }
+  }
+
+  return null;
+}
+
 export function buildPaintMaskPlan(strokes) {
   const ordered = orderPaintStrokesForRendering(strokes);
-  const groups = new Map();
+  const groups = [];
+  let segmentGroups = new Map();
+  let mergeSegment = 0;
 
   ordered.forEach((stroke, index) => {
     if (stroke.tool === "erase") {
@@ -1154,31 +1297,50 @@ export function buildPaintMaskPlan(strokes) {
           stroke
         });
       });
+      mergeSegment += 1;
+      segmentGroups = new Map();
       return;
     }
 
-    const key = stroke.mergeTouches ? strokeGroupKey(stroke) : `single|${stroke.id}`;
-    let group = groups.get(key);
+    const baseKey = strokeGroupKey(stroke);
+    const key = stroke.mergeTouches ? `${mergeSegment}|${baseKey}` : `single|${stroke.id}`;
+    let group = stroke.mergeTouches ? segmentGroups.get(baseKey) : null;
+    let rejoinedAfterErase = false;
+
+    if (!group && stroke.mergeTouches) {
+      group = findVisibleTouchingGroup(groups, baseKey, stroke);
+      rejoinedAfterErase = Boolean(group);
+      if (rejoinedAfterErase) {
+        group.strictPostEraseMasks = true;
+      }
+    }
 
     if (!group) {
       group = {
         key,
+        baseKey,
         order: index,
         sample: stroke,
         strokes: [],
-        maskSteps: []
+        maskSteps: [],
+        strictPostEraseMasks: false
       };
-      groups.set(key, group);
+      groups.push(group);
+    }
+
+    if (stroke.mergeTouches) {
+      segmentGroups.set(baseKey, group);
     }
 
     group.strokes.push(stroke);
     group.maskSteps.push({
       type: "paint",
-      stroke
+      stroke,
+      maskLineWidth: group.strictPostEraseMasks ? getRejoinedStrokeMaskLineWidth(stroke) : undefined
     });
   });
 
-  return Array.from(groups.values()).sort(sortPaintGroups);
+  return groups.sort(sortPaintGroups);
 }
 
 function renderMaskedPaintGroups(ctx, groups, clipMaskSurface = null) {
@@ -1198,7 +1360,12 @@ function renderMaskedPaintGroups(ctx, groups, clipMaskSurface = null) {
     }
 
     group.maskSteps.forEach((step) => {
-      drawMaskStroke(mask.ctx, step.stroke, step.type === "erase" ? "destination-out" : "source-over");
+      drawMaskStrokeWithWidth(
+        mask.ctx,
+        step.stroke,
+        step.type === "erase" ? "destination-out" : "source-over",
+        step.maskLineWidth ?? getStrokeMaskLineWidth(step.stroke)
+      );
     });
 
     paintSurface.ctx.clearRect(0, 0, paintSurface.canvas.width, paintSurface.canvas.height);

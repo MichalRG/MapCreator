@@ -150,6 +150,10 @@ export const BUILTIN_ASSETS = [
   }
 ];
 
+export const DETAIL_SIZE_SCALE_MIN = 0.5;
+export const DETAIL_SIZE_SCALE_MAX = 1.8;
+export const DETAIL_SIZE_SCALE_DEFAULT = 1;
+
 const BUILTIN_ASSET_MAP = new Map(BUILTIN_ASSETS.map((asset) => [asset.id, asset]));
 
 export function getBuiltinAsset(assetId) {
@@ -171,6 +175,15 @@ export function isBuiltinDoorAsset(assetId) {
 export function isBuiltinStructuralAsset(assetId) {
   const category = getBuiltinAsset(assetId).category;
   return category === "wall" || category === "door";
+}
+
+export function normalizeDetailSizeScale(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return DETAIL_SIZE_SCALE_DEFAULT;
+  }
+
+  return Math.max(DETAIL_SIZE_SCALE_MIN, Math.min(DETAIL_SIZE_SCALE_MAX, numericValue));
 }
 
 function drawStoneSpike(ctx, x, y, width, height, fill, stroke) {

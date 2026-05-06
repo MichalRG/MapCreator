@@ -1,4 +1,13 @@
-import { BUILTIN_ASSETS, getBuiltinAsset, isBuiltinStructuralAsset, listBuiltinAssetsByCategory } from "./cave-assets.js";
+import {
+  BUILTIN_ASSETS,
+  DETAIL_SIZE_SCALE_DEFAULT,
+  DETAIL_SIZE_SCALE_MAX,
+  DETAIL_SIZE_SCALE_MIN,
+  getBuiltinAsset,
+  isBuiltinStructuralAsset,
+  listBuiltinAssetsByCategory,
+  normalizeDetailSizeScale
+} from "./cave-assets.js";
 import {
   getDefaultSurfaceVariant,
   getSurfaceVariantLabel,
@@ -56,6 +65,9 @@ const SURFACE_BRUSH_TOOLS = new Set(["floor", "floor-detail", "wall", "water", "
 const DEFAULT_BUILTIN_ASSET = listBuiltinAssetsByCategory("detail")[0] || BUILTIN_ASSETS[0];
 const WALL_ROTATION_STEP = (3 * Math.PI) / 180;
 const FULL_ROTATION = Math.PI * 2;
+const DETAIL_SIZE_PERCENT_MIN = DETAIL_SIZE_SCALE_MIN * 100;
+const DETAIL_SIZE_PERCENT_MAX = DETAIL_SIZE_SCALE_MAX * 100;
+const DETAIL_SIZE_PERCENT_DEFAULT = DETAIL_SIZE_SCALE_DEFAULT * 100;
 const ENVIRONMENT_ASSET_DEFS = Object.freeze([
   Object.freeze({
     id: "door",
@@ -172,6 +184,11 @@ function template() {
                 <option value="circle">Circle</option>
                 <option value="square">Square</option>
               </select>
+            </label>
+
+            <label class="field">
+              <span data-role="detail-size-label">Detail size: 100%</span>
+              <input data-role="detail-size-input" type="range" min="${DETAIL_SIZE_PERCENT_MIN}" max="${DETAIL_SIZE_PERCENT_MAX}" step="5" value="${DETAIL_SIZE_PERCENT_DEFAULT}" />
             </label>
 
             <label class="field">
@@ -341,6 +358,7 @@ export function mountFreeformEditor(container) {
     brushSize: 96,
     brushOpacity: 1,
     brushShape: "circle",
+    detailSizeScale: DETAIL_SIZE_SCALE_DEFAULT,
     detailRotation: 0,
     environmentVariants: {
       door: "wood",
@@ -401,6 +419,8 @@ export function mountFreeformEditor(container) {
     brushSizeInput: byRole(container, "brush-size-input"),
     brushOpacityInput: byRole(container, "brush-opacity-input"),
     brushShapeSelect: byRole(container, "brush-shape-select"),
+    detailSizeInput: byRole(container, "detail-size-input"),
+    detailSizeLabel: byRole(container, "detail-size-label"),
     surfaceVariantLabel: byRole(container, "surface-variant-label"),
     floorVariantSelect: byRole(container, "floor-variant-select"),
     connectPaintInput: byRole(container, "connect-paint-input"),
@@ -475,6 +495,19 @@ export function mountFreeformEditor(container) {
 
   function activeSurfaceBrushSelection() {
     return resolveSurfaceBrushSelection(state.selectedTool, currentSurfaceVariant());
+  }
+
+  function detailSizePercent() {
+    return Math.round(state.detailSizeScale * 100);
+  }
+
+  function scaleDetailSize(size) {
+    return size * state.detailSizeScale;
+  }
+
+  function updateDetailSizeControl() {
+    elements.detailSizeInput.value = String(detailSizePercent());
+    elements.detailSizeLabel.textContent = `Detail size: ${detailSizePercent()}%`;
   }
 
   function setSurfaceVariant(tool, variant) {
@@ -604,7 +637,7 @@ export function mountFreeformEditor(container) {
         assetId: asset.id,
         label: asset.name,
         description: "Imported detail",
-        size: 108
+        size: scaleDetailSize(108)
       };
     }
 
@@ -615,7 +648,7 @@ export function mountFreeformEditor(container) {
       assetId: asset.id,
       label: environmentAsset?.label || asset.label,
       description: environmentAsset?.description || asset.description,
-      size: asset.defaultSize,
+      size: scaleDetailSize(asset.defaultSize),
       category: asset.category || "detail",
       variantLabel: environmentAsset?.variants.find((variant) => variant.assetId === asset.id)?.label || null
     };
@@ -792,6 +825,7 @@ export function mountFreeformEditor(container) {
     ensureActivePaintLayer();
     elements.paintLayerSelect.value = state.activePaintLayerId || "";
     elements.brushShapeSelect.value = state.brushShape;
+    updateDetailSizeControl();
     syncSurfaceVariantOptions();
     syncEnvironmentVariantControls();
   }
@@ -813,6 +847,7 @@ export function mountFreeformEditor(container) {
       "Use each brush variant to shift the material feel: Floor includes Raised, Lowered, Cracked Stone, and Parent Rock options, while Parent Rock, Water, Lava, and Chasm each include a more textured realistic option.",
       "Floor Detail scatters decorative pebbles and grit, and it only shows where floor remains visible on that layer.",
       "Brush Shape switches between the current circular footprint and a square footprint for blockier drafting.",
+      "Detail Size changes the preview and the next placed detail before it is added.",
       "Switch paint layers when one surface needs to sit cleanly above another. Layer 5 always renders above Layer 1.",
       "Hold Shift and click with a paint brush to draw a straight segment from the previous brush endpoint. Add Ctrl to lock it to 45-degree angles.",
       "With a wall piece or door selected, use Ctrl + mouse wheel to rotate it before placing.",
@@ -926,6 +961,10 @@ export function mountFreeformEditor(container) {
         detail.className = "muted";
         detail.textContent = selectedAsset.variantLabel ? `Selected detail: ${selectedAsset.label} (${selectedAsset.variantLabel})` : `Selected detail: ${selectedAsset.label}`;
         summary.append(detail);
+        const detailSize = document.createElement("p");
+        detailSize.className = "muted";
+        detailSize.textContent = `New detail size: ${detailSizePercent()}%`;
+        summary.append(detailSize);
       }
 
       const stats = addInspectorCard("Composition");
@@ -1033,6 +1072,7 @@ export function mountFreeformEditor(container) {
     syncPaintLayerSelect();
     elements.brushSizeInput.value = String(state.brushSize);
     elements.brushOpacityInput.value = String(Math.round(state.brushOpacity * 100));
+    updateDetailSizeControl();
     syncSurfaceVariantOptions();
     elements.connectPaintInput.checked = state.connectPaint;
     elements.showGridInput.checked = state.project.metadata.showGrid;
@@ -1799,6 +1839,13 @@ export function mountFreeformEditor(container) {
     elements.brushShapeSelect.addEventListener("change", () => {
       state.brushShape = elements.brushShapeSelect.value === "square" ? "square" : "circle";
       setStatus(`Brush shape set to ${state.brushShape}.`);
+      render();
+    });
+
+    elements.detailSizeInput.addEventListener("input", () => {
+      state.detailSizeScale = normalizeDetailSizeScale(Number(elements.detailSizeInput.value) / 100);
+      updateDetailSizeControl();
+      setStatus(`Detail size set to ${detailSizePercent()}%.`);
       render();
     });
 

@@ -1,7 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { isBuiltinDoorAsset, isBuiltinStructuralAsset, isBuiltinWallAsset, listBuiltinAssetsByCategory } from "../src/cave-assets.js";
+import {
+  DETAIL_SIZE_SCALE_DEFAULT,
+  DETAIL_SIZE_SCALE_MAX,
+  DETAIL_SIZE_SCALE_MIN,
+  isBuiltinDoorAsset,
+  isBuiltinStructuralAsset,
+  isBuiltinWallAsset,
+  listBuiltinAssetsByCategory,
+  normalizeDetailSizeScale
+} from "../src/cave-assets.js";
 
 test("listBuiltinAssetsByCategory exposes dedicated wall pieces separately from regular details", () => {
   assert.deepEqual(
@@ -26,4 +35,11 @@ test("listBuiltinAssetsByCategory exposes dedicated wall pieces separately from 
   assert.equal(isBuiltinStructuralAsset("wall_corner"), true);
   assert.equal(isBuiltinWallAsset("treasure"), false);
   assert.equal(isBuiltinDoorAsset("treasure"), false);
+});
+
+test("normalizeDetailSizeScale clamps invalid detail size controls", () => {
+  assert.equal(normalizeDetailSizeScale("1.25"), 1.25);
+  assert.equal(normalizeDetailSizeScale(0.1), DETAIL_SIZE_SCALE_MIN);
+  assert.equal(normalizeDetailSizeScale(3), DETAIL_SIZE_SCALE_MAX);
+  assert.equal(normalizeDetailSizeScale(Number.NaN), DETAIL_SIZE_SCALE_DEFAULT);
 });
